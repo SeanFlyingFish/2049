@@ -1,0 +1,1443 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>2049</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <link href="https://cdn.jsdelivr.net/npm/font-awesome@4.7.0/css/font-awesome.min.css" rel="stylesheet">
+    <script>
+        tailwind.config = {
+            theme: {
+                extend: {
+                    colors: {
+                        'bg-2049': '#faf8ef',
+                        'board-2049': '#bbada0',
+                        'cell-2049': '#cdc1b4',
+                        'text-light': '#f9f6f2',
+                        'text-dark': '#776e65',
+                        'item-swap': '#8f7a66',
+                        'item-clear': '#e74c3c',
+                        'item-scissors': '#f39c12',
+                        'item-shuffle': '#3498db',
+                        'item-plus': '#2ecc71',
+                        'item-undo': '#9b59b6',
+                        'challenge': '#9b59b6',
+                    },
+                    fontFamily: {
+                        'game': ['Clear Sans', 'Helvetica Neue', 'Arial', 'sans-serif'],
+                    },
+                }
+            }
+        }
+    </script>
+    <style type="text/tailwindcss">
+        @layer utilities {
+            .tile-gray { background-color: #cdc1b4; color: #776e65; }
+            .tile-2 { background-color: #eee4da; color: #776e65; }
+            .tile-4 { background-color: #ede0c8; color: #776e65; }
+            .tile-8 { background-color: #f2b179; color: #f9f6f2; }
+            .tile-16 { background-color: #f59563; color: #f9f6f2; }
+            .tile-32 { background-color: #f67c5f; color: #f9f6f2; }
+            .tile-64 { background-color: #f65e3b; color: #f9f6f2; }
+            .tile-128 { background-color: #edcf72; color: #f9f6f2; }
+            .tile-256 { background-color: #edcc61; color: #f9f6f2; }
+            .tile-512 { background-color: #edc850; color: #f9f6f2; }
+            .tile-1024 { background-color: #edc53f; color: #f9f6f2; }
+            .tile-2048 { background-color: #edc22e; color: #f9f6f2; }
+            .tile-2049 { background-color: #e74c3c; color: #f9f6f2; }
+            .tile-super { background-color: #3c3a32; color: #f9f6f2; }
+            
+            .tile-appear {
+                animation: appear 0.2s ease-in-out;
+            }
+            
+            .tile-merge {
+                animation: merge 0.2s ease-in-out;
+            }
+            
+            .tile-highlight {
+                animation: highlight 0.5s ease-in-out infinite alternate;
+            }
+            
+            .tile-selected {
+                animation: selected 0.3s ease-in-out;
+                box-shadow: 0 0 15px 5px rgba(0, 255, 0, 0.8);
+            }
+            
+            .tile-challenge {
+                animation: challenge-appear 0.5s ease-in-out;
+                box-shadow: 0 0 10px 3px rgba(155, 89, 182, 0.7);
+            }
+            
+            @keyframes appear {
+                0% { transform: scale(0); opacity: 0; }
+                100% { transform: scale(1); opacity: 1; }
+            }
+            
+            @keyframes merge {
+                0% { transform: scale(1); }
+                50% { transform: scale(1.2); }
+                100% { transform: scale(1); }
+            }
+            
+            @keyframes highlight {
+                0% { box-shadow: 0 0 5px 2px rgba(255, 255, 255, 0.5); }
+                100% { box-shadow: 0 0 15px 5px rgba(255, 255, 255, 0.8); }
+            }
+            
+            @keyframes selected {
+                0% { transform: scale(1); }
+                50% { transform: scale(1.1); }
+                100% { transform: scale(1); }
+            }
+            
+            @keyframes challenge-appear {
+                0% { transform: scale(0) rotate(0deg); opacity: 0; }
+                50% { transform: scale(1.3) rotate(180deg); opacity: 1; }
+                100% { transform: scale(1) rotate(360deg); opacity: 1; }
+            }
+            
+            .game-overlay {
+                background-color: rgba(238, 228, 218, 0.73);
+                z-index: 9999;
+            }
+            
+            .item-button {
+                transition: all 0.2s ease;
+            }
+            
+            .item-button:hover:not(:disabled) {
+                transform: translateY(-2px);
+                box-shadow: 0 4px 8px rgba(0, 0, 0, 0.2);
+            }
+            
+            .item-button:disabled {
+                opacity: 0.5;
+                cursor: not-allowed;
+            }
+            
+            .item-active {
+                transform: scale(1.1);
+                box-shadow: 0 0 10px 3px rgba(255, 255, 255, 0.7);
+            }
+            
+            .challenge-indicator {
+                background: linear-gradient(90deg, #9b59b6, #8e44ad);
+            }
+        }
+    </style>
+</head>
+<body class="bg-bg-2049 min-h-screen flex flex-col items-center justify-center p-4 font-game text-text-dark">
+    <div class="w-full max-w-md">
+        <!-- 游戏标题和分数 -->
+        <div class="flex justify-between items-center mb-6">
+            <h1 class="text-[60px] font-bold leading-none">2049</h1>
+            <div class="flex gap-2">
+                <div class="bg-board-2049 rounded-md px-4 py-2 text-center">
+                    <div class="text-xs uppercase text-white/70 font-bold">分数</div>
+                    <div id="score" class="text-2xl font-bold text-white">0</div>
+                </div>
+                <div class="bg-board-2049 rounded-md px-4 py-2 text-center">
+                    <div class="text-xs uppercase text-white/70 font-bold">最高分</div>
+                    <div id="best-score" class="text-2xl font-bold text-white">0</div>
+                </div>
+            </div>
+        </div>
+        
+        <!-- 挑战进度条 -->
+        <div class="mb-4">
+            <div class="flex justify-between text-xs mb-1">
+                <span class="font-bold text-challenge">随机数生成进度</span>
+                <span id="challenge-count">0 / 30</span>
+            </div>
+            <div class="w-full bg-board-2049/30 rounded-full h-2">
+                <div id="challenge-progress" class="challenge-indicator h-2 rounded-full transition-all duration-300" style="width: 0%"></div>
+            </div>
+        </div>
+        
+        <!-- 游戏说明和新游戏按钮 -->
+        <div class="flex justify-between items-center mb-4">
+            <p class="text-sm">合并相同偶数或相邻奇数，得到 <strong>2049</strong>！</p>
+            <button id="new-game" class="bg-board-2049 hover:bg-board-2049/90 text-white font-bold py-2 px-4 rounded transition-colors">
+                新游戏
+            </button>
+        </div>
+        
+        <!-- 道具栏 -->
+        <div class="bg-board-2049/20 rounded-md p-3 mb-4">
+            <div class="text-xs font-bold mb-2 text-center">道具栏 (点击选择，再点击方块使用)</div>
+            <div class="grid grid-cols-6 gap-2">
+                <button id="item-swap" class="item-button bg-item-swap text-white rounded-md py-2 px-1 flex flex-col items-center" title="交换棋盘上任意两个方块的位置">
+                    <i class="fa fa-exchange text-lg"></i>
+                    <span class="text-xs mt-1">交换 <span id="count-swap">0</span></span>
+                </button>
+                <button id="item-clear" class="item-button bg-item-clear text-white rounded-md py-2 px-1 flex flex-col items-center" title="消除所有相连的同色方块，生成平均值方块">
+                    <i class="fa fa-eraser text-lg"></i>
+                    <span class="text-xs mt-1">消除 <span id="count-clear">0</span></span>
+                </button>
+                <button id="item-scissors" class="item-button bg-item-scissors text-white rounded-md py-2 px-1 flex flex-col items-center" title="将一个方块数字减半">
+                    <i class="fa fa-cut text-lg"></i>
+                    <span class="text-xs mt-1">剪刀 <span id="count-scissors">0</span></span>
+                </button>
+                <button id="item-shuffle" class="item-button bg-item-shuffle text-white rounded-md py-2 px-1 flex flex-col items-center" title="随机打乱所有方块">
+                    <i class="fa fa-random text-lg"></i>
+                    <span class="text-xs mt-1">洗牌 <span id="count-shuffle">0</span></span>
+                </button>
+                <button id="item-plus" class="item-button bg-item-plus text-white rounded-md py-2 px-1 flex flex-col items-center" title="将一个方块加1">
+                    <i class="fa fa-plus text-lg"></i>
+                    <span class="text-xs mt-1">加一 <span id="count-plus">0</span></span>
+                </button>
+                <button id="item-undo" class="item-button bg-item-undo text-white rounded-md py-2 px-1 flex flex-col items-center" title="撤回上一步操作">
+                    <i class="fa fa-undo text-lg"></i>
+                    <span class="text-xs mt-1">撤回 <span id="count-undo">0</span></span>
+                </button>
+            </div>
+        </div>
+        
+        <!-- 游戏棋盘 -->
+        <div id="game-board" class="relative bg-board-2049 rounded-md p-3 aspect-square">
+            <!-- 背景格子 -->
+            <div class="grid grid-cols-4 gap-3 h-full">
+                <div class="bg-cell-2049 rounded"></div>
+                <div class="bg-cell-2049 rounded"></div>
+                <div class="bg-cell-2049 rounded"></div>
+                <div class="bg-cell-2049 rounded"></div>
+                <div class="bg-cell-2049 rounded"></div>
+                <div class="bg-cell-2049 rounded"></div>
+                <div class="bg-cell-2049 rounded"></div>
+                <div class="bg-cell-2049 rounded"></div>
+                <div class="bg-cell-2049 rounded"></div>
+                <div class="bg-cell-2049 rounded"></div>
+                <div class="bg-cell-2049 rounded"></div>
+                <div class="bg-cell-2049 rounded"></div>
+                <div class="bg-cell-2049 rounded"></div>
+                <div class="bg-cell-2049 rounded"></div>
+                <div class="bg-cell-2049 rounded"></div>
+                <div class="bg-cell-2049 rounded"></div>
+            </div>
+            
+            <!-- 数字方块容器 -->
+            <div id="tile-container" class="absolute top-3 left-3 right-3 bottom-3">
+                <!-- 方块会动态生成在这里 -->
+            </div>
+            
+            <!-- 游戏结束/胜利覆盖层 -->
+            <div id="game-overlay" class="absolute inset-0 rounded-md game-overlay flex flex-col items-center justify-center hidden">
+                <h2 id="overlay-title" class="text-4xl font-bold mb-4"></h2>
+                <button id="overlay-button" class="bg-board-2049 hover:bg-board-2049/90 text-white font-bold py-2 px-4 rounded transition-colors">
+                    再来一局
+                </button>
+            </div>
+        </div>
+        
+        <!-- 操作提示 -->
+        <div class="mt-6 text-center text-sm">
+            <p>使用 <strong>方向键</strong> 或 <strong>滑动屏幕</strong> 移动方块</p>
+            <p class="mt-1">每次合成32及以上数字可获得1个道具</p>
+            <p class="mt-1 text-challenge font-bold">每移动一定次数会随机刷新一个随机数方块！</p>
+            <p class="mt-1 text-green-600 font-bold">只要有道具，棋盘满了也不会输！</p>
+            <p class="mt-1 text-blue-600 font-bold">2个奇数可合并，2个相同的偶数可合并</p>
+        </div>
+    </div>
+
+    <script>
+        document.addEventListener('DOMContentLoaded', () => {
+            const tileContainer = document.getElementById('tile-container');
+            const scoreDisplay = document.getElementById('score');
+            const bestScoreDisplay = document.getElementById('best-score');
+            const newGameButton = document.getElementById('new-game');
+            const gameOverlay = document.getElementById('game-overlay');
+            const overlayTitle = document.getElementById('overlay-title');
+            const overlayButton = document.getElementById('overlay-button');
+            const challengeCount = document.getElementById('challenge-count');
+            const challengeProgress = document.getElementById('challenge-progress');
+            
+            // 道具相关元素
+            const itemButtons = {
+                swap: document.getElementById('item-swap'),
+                clear: document.getElementById('item-clear'),
+                scissors: document.getElementById('item-scissors'),
+                shuffle: document.getElementById('item-shuffle'),
+                plus: document.getElementById('item-plus'),
+                undo: document.getElementById('item-undo')
+            };
+            
+            const itemCounts = {
+                swap: document.getElementById('count-swap'),
+                clear: document.getElementById('count-clear'),
+                scissors: document.getElementById('count-scissors'),
+                shuffle: document.getElementById('count-shuffle'),
+                plus: document.getElementById('count-plus'),
+                undo: document.getElementById('count-undo')
+            };
+            
+            let grid = [];
+            let score = 0;
+            let bestScore = parseInt(localStorage.getItem('2049-best-score') || '0');
+            let gameOver = false;
+            let gameWon = false;
+            
+            // 道具系统
+            let items = {
+                swap: 0,
+                clear: 0,
+                scissors: 0,
+                shuffle: 0,
+                plus: 0,
+                undo: 0
+            };
+            
+            let activeItem = null;
+            let selectedTile = null;
+            let nextTileId = 0;
+            let tilePositions = {}; // 用于交换道具的第一个选中方块
+            let history = []; // 用于撤回的历史记录
+
+            // 挑战系统
+            let moveCount = 0;
+            let refreshInterval = 30;
+            let maxTileValue = 0;
+            
+            // 本次移动中合成的次数和数值
+            let mergedValues = [];
+            
+            // 挑战刷新随机数范围上限（仅2个相同2的n次幂合成时更新）
+            let maxMergedPowerOf2 = 4;
+            
+            // ============================
+            // 音效系统（Web Audio API）
+            // ============================
+            var audioCtx = null;
+            var audioInited = false;
+
+            function initAudio() {
+                if (audioInited) return;
+                try {
+                    var AC = window['AudioContext'] || window['webkitAudioContext'];
+                    audioCtx = new AC();
+                    audioInited = true;
+                } catch(e) { /* 浏览器不支持 */ }
+            }
+
+            // 合成值 → 频率映射
+            function getMergeFreq(value) {
+                if (value <= 3)   return 220;
+                if (value <= 7)   return 277;
+                if (value <= 15)  return 330;
+                if (value <= 31)  return 392;
+                if (value <= 63)  return 440;
+                if (value <= 127) return 523;
+                if (value <= 255) return 587;
+                if (value <= 511) return 659;
+                if (value <= 1023) return 784;
+                if (value <= 2047) return 880;
+                if (value === 2049) return 1200;
+                return 990;
+            }
+
+            function playTone(freq, duration, type, volume) {
+                if (!audioCtx) return;
+                var osc = audioCtx.createOscillator();
+                var gain = audioCtx.createGain();
+                osc.type = type || 'sine';
+                osc.frequency.setValueAtTime(freq, audioCtx.currentTime);
+                gain.gain.setValueAtTime(volume || 0.3, audioCtx.currentTime);
+                gain.gain.exponentialRampToValueAtTime(0.001, audioCtx.currentTime + duration);
+                osc.connect(gain);
+                gain.connect(audioCtx.destination);
+                osc.start(audioCtx.currentTime);
+                osc.stop(audioCtx.currentTime + duration);
+            }
+
+            function playMoveSound() {
+                playTone(180, 0.08, 'sine', 0.15);
+            }
+
+            function playMergeSound(value) {
+                var freq = getMergeFreq(value);
+                playTone(freq, 0.25, 'triangle', 0.35);
+                if (value >= 128) {
+                    setTimeout(function() { playTone(freq * 1.5, 0.15, 'sine', 0.15); }, 60);
+                }
+            }
+
+            function playItemSound(type) {
+                var freqs = {
+                    swap:    [330, 440],
+                    clear:   [200, 250, 300],
+                    scissors:[600, 400],
+                    shuffle: [260, 320, 380, 440],
+                    plus:    [400, 500, 600],
+                    undo:    [500, 400]
+                };
+                var seq = freqs[type] || [440];
+                seq.forEach(function(f, i) {
+                    setTimeout(function() { playTone(f, 0.12, 'sine', 0.25); }, i * 70);
+                });
+            }
+
+            function playWinSound() {
+                if (!audioCtx) return;
+                [262, 330, 392, 523].forEach(function(f, i) {
+                    setTimeout(function() { playTone(f, 0.3, 'triangle', 0.4); }, i * 150);
+                });
+                setTimeout(function() { playTone(1047, 0.6, 'triangle', 0.5); }, 600);
+            }
+            // ============================
+
+            // 判断是否为2的n次幂
+            function isPowerOf2(n) {
+                return n > 0 && (n & (n - 1)) === 0;
+            }
+            
+            // 撤回奖励里程碑跟踪（每2000分+1次）
+            let undoMilestoneCount = 0;
+            
+            // 初始化最高分
+            bestScoreDisplay.textContent = bestScore;
+            
+            // ============================
+            // localStorage 存/读 游戏状态
+            // ============================
+            const SAVE_KEY = '2049-game-state';
+
+            function saveGameState() {
+                const state = {
+                    grid,
+                    score,
+                    items,
+                    moveCount,
+                    refreshInterval,
+                    maxTileValue,
+                    gameOver,
+                    gameWon,
+                    history,
+                    undoMilestoneCount
+                };
+                localStorage.setItem(SAVE_KEY, JSON.stringify(state));
+            }
+
+            function loadGameState() {
+                const raw = localStorage.getItem(SAVE_KEY);
+                if (!raw) return false;
+                try {
+                    const state = JSON.parse(raw);
+                    // 如果存档里游戏已结束，就不恢复
+                    if (state.gameOver || state.gameWon) return false;
+                    grid = state.grid;
+                    score = state.score;
+                    items = state.items;
+                    moveCount = state.moveCount;
+                    refreshInterval = state.refreshInterval;
+                    maxTileValue = state.maxTileValue;
+                    gameOver = state.gameOver;
+                    gameWon = state.gameWon;
+                    history = state.history || [];
+                    undoMilestoneCount = state.undoMilestoneCount || 0;
+                    return true;
+                } catch(e) {
+                    return false;
+                }
+            }
+
+            function clearGameState() {
+                localStorage.removeItem(SAVE_KEY);
+            }
+            
+            // 初始化游戏
+            function initGame() {
+                grid = Array(4).fill().map(() => Array(4).fill(0));
+                score = 0;
+                gameOver = false;
+                gameWon = false;
+                
+                // 每个道具初始各1个，撤回初始3个
+                items = { swap: 1, clear: 1, scissors: 1, shuffle: 1, plus: 1, undo: 3 };
+                activeItem = null;
+                selectedTile = null;
+                history = [];
+                undoMilestoneCount = 0;
+                
+                // 重置挑战系统
+                moveCount = 0;
+                refreshInterval = 30;
+                maxTileValue = 0;
+                mergedValues = [];
+                
+                updateScore();
+                updateItemDisplay();
+                updateChallengeDisplay();
+                clearTiles();
+                gameOverlay.classList.add('hidden');
+                
+                // 生成两个初始方块
+                addRandomTile();
+                addRandomTile();
+                
+                // 更新最大数字
+                updateMaxTileValue();
+                
+                // 保存初始状态到历史
+                pushHistory();
+
+                // 持久化
+                saveGameState();
+            }
+            
+            // 清除所有方块
+            function clearTiles() {
+                tileContainer.innerHTML = '';
+            }
+            
+            // 添加随机方块
+            function addRandomTile() {
+                const emptyCells = [];
+                for (let i = 0; i < 4; i++) {
+                    for (let j = 0; j < 4; j++) {
+                        if (grid[i][j] === 0) {
+                            emptyCells.push({ row: i, col: j });
+                        }
+                    }
+                }
+                
+                if (emptyCells.length === 0) return;
+                
+                const randomCell = emptyCells[Math.floor(Math.random() * emptyCells.length)];
+                const value = Math.random() < 0.9 ? 2 : 4;
+                
+                grid[randomCell.row][randomCell.col] = value;
+                addTile(randomCell.row, randomCell.col, value, true);
+            }
+            
+            // 根据数值获取对应的颜色类（区间制）
+            function getTileColorClass(value) {
+                if (value <= 1) return 'tile-gray';
+                if (value <= 3) return 'tile-2';
+                if (value <= 7) return 'tile-4';
+                if (value <= 15) return 'tile-8';
+                if (value <= 31) return 'tile-16';
+                if (value <= 63) return 'tile-32';
+                if (value <= 127) return 'tile-64';
+                if (value <= 255) return 'tile-128';
+                if (value <= 511) return 'tile-256';
+                if (value <= 1023) return 'tile-512';
+                if (value <= 2047) return 'tile-1024';
+                if (value <= 2048) return 'tile-2048';
+                if (value === 2049) return 'tile-2049';
+                return 'tile-super';
+            }
+            
+            // 添加一个方块到DOM
+            function addTile(row, col, value, isNew = false, isHighlighted = false, isChallenge = false, isSelected = false) {
+                const tile = document.createElement('div');
+                
+                tile.style.position = 'absolute';
+                tile.style.width = 'calc((100% - 36px) / 4)';
+                tile.style.height = 'calc((100% - 36px) / 4)';
+                tile.style.left = `calc(${col} * ((100% - 36px) / 4 + 12px))`;
+                tile.style.top = `calc(${row} * ((100% - 36px) / 4 + 12px))`;
+                tile.style.borderRadius = '0.25rem';
+                tile.style.display = 'flex';
+                tile.style.alignItems = 'center';
+                tile.style.justifyContent = 'center';
+                tile.style.fontWeight = 'bold';
+                tile.style.fontSize = value >= 1000 ? '1.5rem' : value >= 100 ? '2rem' : '2.5rem';
+                tile.style.zIndex = '10';
+                tile.style.cursor = activeItem ? 'pointer' : 'default';
+                tile.style.transition = 'left 0.12s ease-in-out, top 0.12s ease-in-out';
+                
+                tile.textContent = value;
+                tile.dataset.row = row;
+                tile.dataset.col = col;
+                
+                // 分配唯一ID
+                const tileId = nextTileId++;
+                tile.dataset.id = tileId;
+                tilePositions[tileId] = {row: row, col: col};
+                
+                tile.classList.add(getTileColorClass(value));
+                
+                if (isNew) tile.classList.add('tile-appear');
+                if (isHighlighted) tile.classList.add('tile-highlight');
+                if (isChallenge) tile.classList.add('tile-challenge');
+                if (isSelected) tile.classList.add('tile-selected');
+                
+                tile.addEventListener('click', () => {
+                    if (activeItem && grid[row][col] !== 0) {
+                        useItemOnTile(row, col);
+                    }
+                });
+                
+                tileContainer.appendChild(tile);
+                return tileId;
+            }
+            
+            // 更新分数，并检查撤回奖励里程碑
+            function updateScore() {
+                scoreDisplay.textContent = score;
+                if (score > bestScore) {
+                    bestScore = score;
+                    bestScoreDisplay.textContent = bestScore;
+                    localStorage.setItem('2049-best-score', bestScore);
+                }
+                
+                // 每2000分给一次撤回机会
+                const milestones = Math.floor(score / 2000);
+                if (milestones > undoMilestoneCount) {
+                    const gained = milestones - undoMilestoneCount;
+                    undoMilestoneCount = milestones;
+                    items.undo += gained;
+                    showToast(`🎉 每2000分奖励！获得${gained}次撤回机会！`);
+                    updateItemDisplay();
+                }
+                
+                // 更新刷新间隔
+                refreshInterval = Math.max(10, 30 - 2*Math.floor(score / 2000));
+                updateChallengeDisplay();
+            }
+            
+            // 更新挑战显示
+            function updateChallengeDisplay() {
+                challengeCount.textContent = `${moveCount} / ${refreshInterval}`;
+                challengeProgress.style.width = `${(moveCount / refreshInterval) * 100}%`;
+            }
+            
+            // 更新道具显示
+            function updateItemDisplay() {
+                for (const [type, count] of Object.entries(items)) {
+                    itemCounts[type].textContent = count;
+                    itemButtons[type].disabled = count <= 0;
+                    
+                    if (activeItem === type) {
+                        itemButtons[type].classList.add('item-active');
+                    } else {
+                        itemButtons[type].classList.remove('item-active');
+                    }
+                }
+                
+                const tiles = tileContainer.querySelectorAll('div');
+                tiles.forEach(tile => {
+                    tile.style.cursor = activeItem ? 'pointer' : 'default';
+                });
+            }
+            
+            // 更新当前最大数字
+            function updateMaxTileValue() {
+                maxTileValue = 0;
+                for (let i = 0; i < 4; i++) {
+                    for (let j = 0; j < 4; j++) {
+                        if (grid[i][j] > maxTileValue) {
+                            maxTileValue = grid[i][j];
+                        }
+                    }
+                }
+            }
+            
+            // 检查胜利（任何方式产生2049都算赢），返回是否刚获胜
+            function checkWin() {
+                if (gameWon) return false;
+                for (var i = 0; i < 4; i++) {
+                    for (var j = 0; j < 4; j++) {
+                        if (grid[i][j] === 2049) {
+                            gameWon = true;
+                            playWinSound();
+                            setTimeout(function() { showOverlay('你赢了！'); }, 300);
+                            return true;
+                        }
+                    }
+                }
+                return false;
+            }
+            
+            // ============================
+            // 撤回历史栈（独立于持久化历史）
+            // ============================
+            function pushHistory() {
+                history.push({
+                    grid: JSON.parse(JSON.stringify(grid)),
+                    score: score,
+                    moveCount: moveCount,
+                    maxTileValue: maxTileValue,
+                    items: JSON.parse(JSON.stringify(items)),
+                    undoMilestoneCount: undoMilestoneCount
+                });
+                // 只保留最近20步
+                if (history.length > 20) {
+                    history.shift();
+                }
+            }
+
+            // 执行撤回
+            function doUndo() {
+                if (items.undo <= 0) return;
+                // history 最后一条是当前状态，倒数第二条是上一步
+                if (history.length < 2) {
+                    showToast('没有可撤回的步骤！');
+                    return;
+                }
+                // 消耗1次撤回机会
+                items.undo--;
+                // 弹出当前状态
+                history.pop();
+                // 恢复上一步状态（不弹出，保持可继续撤回）
+                const prev = history[history.length - 1];
+                grid = JSON.parse(JSON.stringify(prev.grid));
+                score = prev.score;
+                moveCount = prev.moveCount;
+                maxTileValue = prev.maxTileValue;
+                // 恢复道具但不恢复undo数量（已经消耗了1次）
+                const restoredItems = JSON.parse(JSON.stringify(prev.items));
+                restoredItems.undo = items.undo;
+                items = restoredItems;
+                undoMilestoneCount = prev.undoMilestoneCount;
+
+                gameOver = false;
+                gameWon = false;
+
+                scoreDisplay.textContent = score;
+                updateItemDisplay();
+                updateChallengeDisplay();
+                renderTiles(prev.grid); // 传同一个grid，无合并动画
+                gameOverlay.classList.add('hidden');
+
+                saveGameState();
+                showToast('✅ 已撤回上一步！');
+            }
+            
+            // 检查玩家是否有可用道具
+            function hasAnyItems() {
+                for (const count of Object.values(items)) {
+                    if (count > 0) return true;
+                }
+                return false;
+            }
+            
+            // 移动方块
+            function move(direction) {
+                if (gameOver || gameWon || activeItem) return;
+                
+                let moved = false;
+                const oldGrid = JSON.parse(JSON.stringify(grid));
+                const oldScore = score;
+                
+                mergedValues = [];
+                
+                switch (direction) {
+                    case 'up':    moved = moveUp();    break;
+                    case 'down':  moved = moveDown();  break;
+                    case 'left':  moved = moveLeft();  break;
+                    case 'right': moved = moveRight(); break;
+                }
+                
+                if (moved) {
+                    playMoveSound();
+                    // 播放所有合并音效
+                    for (var mi = 0; mi < mergedValues.length; mi++) {
+                        playMergeSound(mergedValues[mi]);
+                    }
+                    
+                    moveCount++;
+                    
+                    // 保存历史
+                    pushHistory();
+                    
+                    updateMaxTileValue();
+                    
+                    let itemCount = 0;
+                    for (const value of mergedValues) {
+                        if (value >= 32) itemCount++;
+                    }
+                    
+                    if (itemCount > 0) {
+                        giveRandomItems(itemCount);
+                        showToast(`合成成功！获得${itemCount}个道具！`);
+                    }
+                    
+                    // 使用带动画的渲染
+                    renderTilesWithAnimation(oldGrid);
+                    
+                    setTimeout(() => {
+                        // 挑战触发时不生成普通2/4方块，仅生成挑战方块
+                        if (moveCount >= refreshInterval) {
+                            refreshRandomTileWithAnimation();
+                            moveCount = 0;
+                        } else {
+                            addRandomTileWithAnimation();
+                        }
+
+                        if (!checkWin() && isGameOver()) {
+                            gameOver = true;
+                            showOverlay('游戏结束！');
+                        }
+                        
+                        updateChallengeDisplay();
+                        saveGameState();
+                    }, 200); // 等待滑动和合并动画完成
+                }
+            }
+            
+            // 给予随机道具（不含undo）
+            function giveRandomItems(count) {
+                const itemTypes = ['swap', 'clear', 'scissors', 'shuffle', 'plus'];
+                
+                for (let i = 0; i < count; i++) {
+                    const randomType = itemTypes[Math.floor(Math.random() * itemTypes.length)];
+                    items[randomType]++;
+                }
+                
+                updateItemDisplay();
+            }
+
+            
+            // 添加随机方块（带动画）
+            function addRandomTileWithAnimation() {
+                const emptyCells = [];
+                for (let i = 0; i < 4; i++) {
+                    for (let j = 0; j < 4; j++) {
+                        if (grid[i][j] === 0) {
+                            emptyCells.push({ row: i, col: j });
+                        }
+                    }
+                }
+                
+                if (emptyCells.length === 0) return;
+                
+                const randomCell = emptyCells[Math.floor(Math.random() * emptyCells.length)];
+                const value = Math.random() < 0.9 ? 2 : 4;
+                
+                grid[randomCell.row][randomCell.col] = value;
+                addTile(randomCell.row, randomCell.col, value, true);
+            }
+            
+            // 刷新随机挑战方块（带动画）
+            function refreshRandomTileWithAnimation() {
+                const emptyCells = [];
+                for (let i = 0; i < 4; i++) {
+                    for (let j = 0; j < 4; j++) {
+                        if (grid[i][j] === 0) {
+                            emptyCells.push({ row: i, col: j });
+                        }
+                    }
+                }
+                
+                if (emptyCells.length === 0) {
+                    showToast('没有空位，挑战方块无法生成！');
+                    return;
+                }
+                
+                const randomCell = emptyCells[Math.floor(Math.random() * emptyCells.length)];
+                const value = Math.floor(Math.random() * (maxMergedPowerOf2 - 1)) + 1;
+                
+                grid[randomCell.row][randomCell.col] = value;
+                addTile(randomCell.row, randomCell.col, value, false, false, true);
+                
+                showToast(`⚡ 挑战刷新：出现了 ${value}！`);
+                
+                updateMaxTileValue();
+                pushHistory();
+                
+                if (!checkWin() && isGameOver()) {
+                    gameOver = true;
+                    showOverlay('游戏结束！');
+                }
+            }
+            
+            // 显示提示信息
+            function showToast(message) {
+                const toast = document.createElement('div');
+                toast.className = 'fixed top-4 left-1/2 transform -translate-x-1/2 bg-board-2049 text-white px-4 py-2 rounded-md font-bold z-50';
+                toast.textContent = message;
+                toast.style.animation = 'appear 0.3s ease-in-out';
+                
+                document.body.appendChild(toast);
+                
+                setTimeout(() => {
+                    toast.style.opacity = '0';
+                    toast.style.transition = 'opacity 0.3s ease-in-out';
+                    setTimeout(() => {
+                        document.body.removeChild(toast);
+                    }, 300);
+                }, 1500);
+            }
+            
+            // 重新渲染所有方块（带动画效果）
+            function renderTilesWithAnimation(oldGrid) {
+                const tileSize = 'calc((100% - 36px) / 4)';
+                const gap = '12px';
+                
+                // 为所有现有方块设置到最终位置（触发CSS transition）
+                const tiles = tileContainer.querySelectorAll('div');
+                
+                // 记录新grid中每个位置的方块应该来自哪
+                // 我们先清除所有方块，然后用动画重新创建
+                // 为了实现动画，我们需要记录旧位置
+                
+                // 简单方案：直接重新渲染，但新方块会有appear动画，合并方块会有merge动画
+                clearTiles();
+                
+                // 重新创建所有方块
+                for (let i = 0; i < 4; i++) {
+                    for (let j = 0; j < 4; j++) {
+                        if (grid[i][j] !== 0) {
+                            // 判断是否是新方块（在oldGrid中这个位置是0）
+                            const isNew = !oldGrid || oldGrid[i][j] === 0;
+                            // 判断是否是合并的方块
+                            const isMerged = oldGrid && oldGrid[i][j] !== 0 && oldGrid[i][j] !== grid[i][j];
+                            
+                            addTile(i, j, grid[i][j], isNew);
+                            
+                            // 如果是合并的方块，添加合并动画
+                            if (isMerged) {
+                                const tiles = tileContainer.querySelectorAll('div');
+                                const lastTile = tiles[tiles.length - 1];
+                                setTimeout(() => {
+                                    lastTile.classList.add('tile-merge');
+                                }, 50);
+                            }
+                        }
+                    }
+                }
+            }
+            
+            // 根据位置查找tile元素
+            function findTileElementAtPosition(row, col) {
+                const tiles = tileContainer.querySelectorAll('div');
+                for (let tile of tiles) {
+                    if (parseInt(tile.dataset.row) === row && parseInt(tile.dataset.col) === col) {
+                        return tile;
+                    }
+                }
+                return null;
+            }
+            
+            // 根据位置查找tile元素
+            function findTileElementAtPosition(row, col) {
+                const tiles = tileContainer.querySelectorAll('div');
+                for (let tile of tiles) {
+                    if (parseInt(tile.dataset.row) === row && parseInt(tile.dataset.col) === col) {
+                        return tile;
+                    }
+                }
+                return null;
+            }
+            
+            // 移除tile元素
+            function removeTileElement(row, col) {
+                const tile = findTileElementAtPosition(row, col);
+                if (tile) {
+                    tile.remove();
+                }
+            }
+            
+            // 重新渲染所有方块（无动画，用于重置等情况）
+            function renderTiles(oldGrid) {
+                clearTiles();
+                for (let i = 0; i < 4; i++) {
+                    for (let j = 0; j < 4; j++) {
+                        if (grid[i][j] !== 0) {
+                            const isMerged = oldGrid && oldGrid[i] && oldGrid[i][j] !== 0 && oldGrid[i][j] !== grid[i][j];
+                            addTile(i, j, grid[i][j], !isMerged);
+                            
+                            if (isMerged) {
+                                const tiles = tileContainer.querySelectorAll('div');
+                                const lastTile = tiles[tiles.length - 1];
+                                lastTile.classList.add('tile-merge');
+                            }
+                        }
+                    }
+                }
+            }
+            
+            // 检查两个数字是否可以合并
+            function canMerge(a, b) {
+                if (a % 2 === 1 && b % 2 === 1) return true;
+                if (a % 2 === 0 && b % 2 === 0 && a === b) return true;
+                return false;
+            }
+            
+            // 向左移动
+            function moveLeft() {
+                let moved = false;
+                
+                for (let row = 0; row < 4; row++) {
+                    let newRow = grid[row].filter(val => val !== 0);
+                    
+                    for (let i = 0; i < newRow.length - 1; i++) {
+                        if (canMerge(newRow[i], newRow[i + 1])) {
+                            const val = newRow[i];
+                            newRow[i] += newRow[i + 1];
+                            score += newRow[i];
+                            mergedValues.push(newRow[i]);
+                            if (isPowerOf2(val) && isPowerOf2(newRow[i])) {
+                                maxMergedPowerOf2 = Math.max(maxMergedPowerOf2, newRow[i]);
+                            }
+                            newRow.splice(i + 1, 1);
+                            moved = true;
+                        }
+                    }
+                    
+                    while (newRow.length < 4) newRow.push(0);
+                    
+                    if (JSON.stringify(newRow) !== JSON.stringify(grid[row])) moved = true;
+                    grid[row] = newRow;
+                }
+                
+                updateScore();
+                return moved;
+            }
+            
+            // 向右移动
+            function moveRight() {
+                let moved = false;
+                
+                for (let row = 0; row < 4; row++) {
+                    let newRow = grid[row].filter(val => val !== 0);
+                    
+                    for (let i = newRow.length - 1; i > 0; i--) {
+                        if (canMerge(newRow[i], newRow[i - 1])) {
+                            const val = newRow[i];
+                            newRow[i] += newRow[i - 1];
+                            score += newRow[i];
+                            mergedValues.push(newRow[i]);
+                            if (isPowerOf2(val) && isPowerOf2(newRow[i])) {
+                                maxMergedPowerOf2 = Math.max(maxMergedPowerOf2, newRow[i]);
+                            }
+                            newRow.splice(i - 1, 1);
+                            i--;
+                            moved = true;
+                        }
+                    }
+                    
+                    while (newRow.length < 4) newRow.unshift(0);
+                    
+                    if (JSON.stringify(newRow) !== JSON.stringify(grid[row])) moved = true;
+                    grid[row] = newRow;
+                }
+                
+                updateScore();
+                return moved;
+            }
+            
+            // 向上移动
+            function moveUp() {
+                let moved = false;
+                
+                for (let col = 0; col < 4; col++) {
+                    let newCol = [];
+                    for (let row = 0; row < 4; row++) {
+                        if (grid[row][col] !== 0) newCol.push(grid[row][col]);
+                    }
+                    
+                    for (let i = 0; i < newCol.length - 1; i++) {
+                        if (canMerge(newCol[i], newCol[i + 1])) {
+                            const val = newCol[i];
+                            newCol[i] += newCol[i + 1];
+                            score += newCol[i];
+                            mergedValues.push(newCol[i]);
+                            if (isPowerOf2(val) && isPowerOf2(newCol[i])) {
+                                maxMergedPowerOf2 = Math.max(maxMergedPowerOf2, newCol[i]);
+                            }
+                            newCol.splice(i + 1, 1);
+                            moved = true;
+                        }
+                    }
+                    
+                    while (newCol.length < 4) newCol.push(0);
+                    
+                    let oldCol = [];
+                    for (let row = 0; row < 4; row++) oldCol.push(grid[row][col]);
+                    if (JSON.stringify(newCol) !== JSON.stringify(oldCol)) moved = true;
+                    
+                    for (let row = 0; row < 4; row++) grid[row][col] = newCol[row];
+                }
+                
+                updateScore();
+                return moved;
+            }
+            
+            // 向下移动
+            function moveDown() {
+                let moved = false;
+                
+                for (let col = 0; col < 4; col++) {
+                    let newCol = [];
+                    for (let row = 0; row < 4; row++) {
+                        if (grid[row][col] !== 0) newCol.push(grid[row][col]);
+                    }
+                    
+                    for (let i = newCol.length - 1; i > 0; i--) {
+                        if (canMerge(newCol[i], newCol[i - 1])) {
+                            const val = newCol[i];
+                            newCol[i] += newCol[i - 1];
+                            score += newCol[i];
+                            mergedValues.push(newCol[i]);
+                            if (isPowerOf2(val) && isPowerOf2(newCol[i])) {
+                                maxMergedPowerOf2 = Math.max(maxMergedPowerOf2, newCol[i]);
+                            }
+                            newCol.splice(i - 1, 1);
+                            i--;
+                            moved = true;
+                        }
+                    }
+                    
+                    while (newCol.length < 4) newCol.unshift(0);
+                    
+                    let oldCol = [];
+                    for (let row = 0; row < 4; row++) oldCol.push(grid[row][col]);
+                    if (JSON.stringify(newCol) !== JSON.stringify(oldCol)) moved = true;
+                    
+                    for (let row = 0; row < 4; row++) grid[row][col] = newCol[row];
+                }
+                
+                updateScore();
+                return moved;
+            }
+            
+            // 检查游戏是否结束
+            function isGameOver() {
+                for (let i = 0; i < 4; i++) {
+                    for (let j = 0; j < 4; j++) {
+                        if (grid[i][j] === 0) return false;
+                    }
+                }
+                
+                for (let i = 0; i < 4; i++) {
+                    for (let j = 0; j < 4; j++) {
+                        if (j < 3 && canMerge(grid[i][j], grid[i][j + 1])) return false;
+                        if (i < 3 && canMerge(grid[i][j], grid[i + 1][j])) return false;
+                    }
+                }
+                
+                if (hasAnyItems()) {
+                    showToast('棋盘满了！快使用道具继续游戏！');
+                    return false;
+                }
+                
+                return true;
+            }
+            
+            // 显示覆盖层
+            function showOverlay(title) {
+                overlayTitle.textContent = title;
+                gameOverlay.classList.remove('hidden');
+                clearGameState();
+            }
+            
+            // 道具系统 - 选择道具
+            function selectItem(type) {
+                if (items[type] <= 0) return;
+
+                // 撤回道具直接执行
+                if (type === 'undo') {
+                    doUndo();
+                    return;
+                }
+                
+                if (activeItem === type) {
+                    activeItem = null;
+                    selectedTile = null;
+                } else {
+                    activeItem = type;
+                    selectedTile = null;
+                    
+                    if (type === 'shuffle') {
+                        useShuffleItem();
+                        return;
+                    }
+                }
+                
+                updateItemDisplay();
+                renderTiles(grid);
+                
+                const tiles = tileContainer.querySelectorAll('div');
+                tiles.forEach(tile => {
+                    if (activeItem) {
+                        tile.classList.add('tile-highlight');
+                    } else {
+                        tile.classList.remove('tile-highlight');
+                        tile.classList.remove('tile-selected');
+                    }
+                });
+            }
+            
+            // 使用深度优先搜索(DFS)查找所有连通的同色方块
+            function findConnectedSameColorTiles(startRow, startCol) {
+                const targetColorClass = getTileColorClass(grid[startRow][startCol]);
+                const visited = Array(4).fill().map(() => Array(4).fill(false));
+                const connected = [];
+                
+                function dfs(row, col) {
+                    if (row < 0 || row >= 4 || col < 0 || col >= 4) return;
+                    if (visited[row][col]) return;
+                    if (grid[row][col] === 0) return;
+                    if (getTileColorClass(grid[row][col]) !== targetColorClass) return;
+                    
+                    visited[row][col] = true;
+                    connected.push({ row, col, value: grid[row][col] });
+                    
+                    dfs(row - 1, col);
+                    dfs(row + 1, col);
+                    dfs(row, col - 1);
+                    dfs(row, col + 1);
+                }
+                
+                dfs(startRow, startCol);
+                return connected;
+            }
+            
+            // 道具系统 - 在方块上使用道具
+            function useItemOnTile(row, col) {
+                if (!activeItem || items[activeItem] <= 0) return;
+                
+                const value = grid[row][col];
+                if (value === 0) return;
+                
+                let success = false;
+                const oldGrid = JSON.parse(JSON.stringify(grid));
+                
+                switch (activeItem) {
+                    case 'swap':
+                        // 交换道具：可交换棋盘上任意两个方块
+                        if (!selectedTile) {
+                            selectedTile = { row, col };
+                            showToast('已选择第一个方块，请选择第二个方块（任意位置）');
+                            
+                            renderTiles(grid);
+                            const tiles = tileContainer.querySelectorAll('div');
+                            tiles.forEach(tile => {
+                                if (parseInt(tile.dataset.row) === row && parseInt(tile.dataset.col) === col) {
+                                    tile.classList.add('tile-selected');
+                                }
+                                tile.classList.add('tile-highlight');
+                            });
+                            return;
+                        } else {
+                            if (selectedTile.row === row && selectedTile.col === col) {
+                                // 点同一个方块 → 取消选择
+                                selectedTile = null;
+                                showToast('已取消选择');
+                                renderTiles(grid);
+                                const tiles = tileContainer.querySelectorAll('div');
+                                tiles.forEach(tile => tile.classList.add('tile-highlight'));
+                                return;
+                            }
+                            
+                            // 任意两个方块都可以交换
+                            [grid[selectedTile.row][selectedTile.col], grid[row][col]] = 
+                            [grid[row][col], grid[selectedTile.row][selectedTile.col]];
+                            
+                            success = true;
+                            showToast('交换成功！');
+                        }
+                        break;
+                        
+                    case 'clear':
+                        const connectedTiles = findConnectedSameColorTiles(row, col);
+                        
+                        if (connectedTiles.length >= 3) {
+                            let sum = 0;
+                            for (const tile of connectedTiles) sum += tile.value;
+                            const average = Math.round(sum / connectedTiles.length);
+                            
+                            for (const tile of connectedTiles) grid[tile.row][tile.col] = 0;
+                            grid[row][col] = average;
+                            
+                            success = true;
+                            showToast(`消除了${connectedTiles.length}个同色方块，生成了${average}！`);
+                        } else {
+                            showToast(`需要至少3个相连的同色方块！当前只有${connectedTiles.length}个`);
+                            return;
+                        }
+                        break;
+                        
+                    case 'scissors':
+                        if (value > 2) {
+                            grid[row][col] = Math.floor(value / 2);
+                            success = true;
+                            showToast(`将${value}减半为${grid[row][col]}！`);
+                        } else {
+                            showToast('不能对2使用剪刀！');
+                            return;
+                        }
+                        break;
+                        
+                    case 'plus':
+                        grid[row][col] = value + 1;
+                        success = true;
+                        showToast(`将${value}变成了${value + 1}！`);
+                        break;
+                }
+                
+                if (success) {
+                    playItemSound(activeItem);
+                    items[activeItem]--;
+                    activeItem = null;
+                    selectedTile = null;
+                    
+                    updateItemDisplay();
+                    renderTilesWithAnimation(oldGrid);
+                    updateMaxTileValue();
+                    pushHistory();
+                    saveGameState();
+                    
+                    if (!checkWin() && isGameOver()) {
+                        gameOver = true;
+                        showOverlay('游戏结束！');
+                    }
+                }
+            }
+            
+            // 使用洗牌道具（带动画）
+            function useShuffleItem() {
+                const oldGrid = JSON.parse(JSON.stringify(grid));
+                const values = [];
+                for (let i = 0; i < 4; i++) {
+                    for (let j = 0; j < 4; j++) {
+                        if (grid[i][j] !== 0) values.push(grid[i][j]);
+                    }
+                }
+                
+                for (let i = values.length - 1; i > 0; i--) {
+                    const j = Math.floor(Math.random() * (i + 1));
+                    [values[i], values[j]] = [values[j], values[i]];
+                }
+                
+                grid = Array(4).fill().map(() => Array(4).fill(0));
+                let index = 0;
+                for (let i = 0; i < 4; i++) {
+                    for (let j = 0; j < 4; j++) {
+                        if (index < values.length) grid[i][j] = values[index++];
+                    }
+                }
+                
+                items.shuffle--;
+                activeItem = null;
+                selectedTile = null;
+                
+                updateItemDisplay();
+                renderTilesWithAnimation(oldGrid);
+                updateMaxTileValue();
+                pushHistory();
+                saveGameState();
+                
+                showToast('所有方块已打乱！');
+                
+                if (!checkWin() && isGameOver()) {
+                    gameOver = true;
+                    showOverlay('游戏结束！');
+                }
+            }
+            
+            // 键盘事件监听
+            document.addEventListener('keydown', (e) => {
+                initAudio();
+                if (activeItem && e.key === 'Escape') {
+                    activeItem = null;
+                    selectedTile = null;
+                    updateItemDisplay();
+                    
+                    const tiles = tileContainer.querySelectorAll('div');
+                    tiles.forEach(tile => {
+                        tile.classList.remove('tile-highlight');
+                        tile.classList.remove('tile-selected');
+                    });
+                    return;
+                }
+                
+                switch (e.key) {
+                    case 'ArrowUp':    e.preventDefault(); move('up');    break;
+                    case 'ArrowDown':  e.preventDefault(); move('down');  break;
+                    case 'ArrowLeft':  e.preventDefault(); move('left');  break;
+                    case 'ArrowRight': e.preventDefault(); move('right'); break;
+                }
+            });
+            
+            // 触摸滑动事件（只在棋盘区域内响应，并阻止页面滚动）
+            let touchStartX = 0;
+            let touchStartY = 0;
+            let touchMoved = false; // 是否发生了真实的滑动
+
+            const gameBoard = document.getElementById('game-board');
+
+            gameBoard.addEventListener('touchstart', (e) => {
+                initAudio();
+                touchStartX = e.touches[0].clientX;
+                touchStartY = e.touches[0].clientY;
+                touchMoved = false;
+                // 不在 touchstart 里 preventDefault，让 click 事件可以正常触发
+            }, { passive: true });
+
+            gameBoard.addEventListener('touchmove', (e) => {
+                const dx = Math.abs(e.touches[0].clientX - touchStartX);
+                const dy = Math.abs(e.touches[0].clientY - touchStartY);
+                // 超过 8px 才认为是滑动，阻止页面滚动
+                if (dx > 8 || dy > 8) {
+                    touchMoved = true;
+                    e.preventDefault();
+                }
+            }, { passive: false });
+
+            gameBoard.addEventListener('touchend', (e) => {
+                const touchEndX = e.changedTouches[0].clientX;
+                const touchEndY = e.changedTouches[0].clientY;
+                const diffX = touchEndX - touchStartX;
+                const diffY = touchEndY - touchStartY;
+
+                if (touchMoved) {
+                    // 真实滑动：执行游戏移动，阻止默认行为（防止 click 误触）
+                    handleSwipe(diffX, diffY);
+                    e.preventDefault();
+                }
+                // 轻触（tap）：不 preventDefault，让 click 事件冒泡到方块元素
+                touchMoved = false;
+            }, { passive: false });
+
+            function handleSwipe(diffX, diffY) {
+                const minSwipeDistance = 30;
+                if (Math.abs(diffX) > Math.abs(diffY)) {
+                    if (Math.abs(diffX) > minSwipeDistance) {
+                        move(diffX > 0 ? 'right' : 'left');
+                    }
+                } else {
+                    if (Math.abs(diffY) > minSwipeDistance) {
+                        move(diffY > 0 ? 'down' : 'up');
+                    }
+                }
+            }
+            
+            // 道具按钮点击事件
+            for (const [type, button] of Object.entries(itemButtons)) {
+                button.addEventListener('click', () => selectItem(type));
+            }
+            
+            // 新游戏按钮点击事件
+            newGameButton.addEventListener('click', () => {
+                clearGameState();
+                initGame();
+            });
+            overlayButton.addEventListener('click', () => {
+                clearGameState();
+                initGame();
+            });
+            
+            // 启动时：尝试恢复存档，否则新游戏
+            const restored = loadGameState();
+            if (restored) {
+                activeItem = null;
+                selectedTile = null;
+                mergedValues = [];
+                updateScore();
+                updateItemDisplay();
+                updateChallengeDisplay();
+                clearTiles();
+                gameOverlay.classList.add('hidden');
+                renderTiles(grid);
+                showToast('✅ 已恢复上次游戏进度！');
+            } else {
+                initGame();
+            }
+        });
+    </script>
+</body>
+</html>
