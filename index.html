@@ -48,11 +48,6 @@
             .tile-2048 { background-color: #d02c3f; color: #f9f6f2; }
             .tile-2049 { background-color: #e74c3c; color: #f9f6f2; }
             .tile-super { background-color: #3c3a32; color: #f9f6f2; }
-            .tile-blocked {
-                background-color: #636e72;
-                color: #dfe6e9;
-                cursor: not-allowed;
-            }
             
             .tile-appear {
                 animation: appear 0.2s ease-in-out;
@@ -462,18 +457,16 @@
             // 关卡特殊规则（第一关：第4列/第4行为X不可操作）
             // ============================
             function isBlocked(row, col) {
-                if (currentLevel === 1) {
-                    // 第一关：第4列(col=3) 或 第4行(row=3) 不能操作
-                    return row === 3 || col === 3;
-                }
+                // 当前所有关卡均无X不可操作位置，统一返回false
                 return false;
             }
 
-            // 第一关预设布局（3×3可玩区域）
+            // 第一关预设布局（4×4）
             const level1Preset = [
-                [7, 9, 16],
-                [4, 16, 32],
-                [8, 31, 33]
+                [0, 0, 0, 0],
+                [0, 0, 0, 0],
+                [7, 0, 9, 0],
+                [0, 8, 8, 0]
             ];
 
             // ============================
@@ -1003,15 +996,11 @@
                 clearTiles();
                 gameOverlay.classList.add('hidden');
 
-                // 第一关使用预设布局，第4列和第4行为X不可操作（设为-1）
+                // 第一关使用预设布局（4×4，无X位置）
                 if (currentLevel === 1) {
                     for (let i = 0; i < 4; i++) {
                         for (let j = 0; j < 4; j++) {
-                            if (i <= 2 && j <= 2) {
-                                grid[i][j] = level1Preset[i][j];
-                            } else {
-                                grid[i][j] = -1; // X位置标记为-1
-                            }
+                            grid[i][j] = level1Preset[i][j];
                         }
                     }
                 } else {
@@ -1130,38 +1119,6 @@
                 
                 tileContainer.appendChild(tile);
                 return tileId;
-            }
-            
-            // 添加X方块（不可操作位置）
-            function addXTile(row, col) {
-                const tile = document.createElement('div');
-                
-                tile.style.position = 'absolute';
-                tile.style.width = 'calc((100% - 36px) / 4)';
-                tile.style.height = 'calc((100% - 36px) / 4)';
-                tile.style.left = `calc(${col} * ((100% - 36px) / 4 + 12px))`;
-                tile.style.top = `calc(${row} * ((100% - 36px) / 4 + 12px))`;
-                tile.style.borderRadius = '0.25rem';
-                tile.style.display = 'flex';
-                tile.style.alignItems = 'center';
-                tile.style.justifyContent = 'center';
-                tile.style.fontWeight = 'bold';
-                tile.style.fontSize = '2rem';
-                tile.style.zIndex = '5';
-                tile.style.cursor = 'not-allowed';
-                tile.style.transition = 'none';
-                
-                tile.textContent = 'X';
-                tile.dataset.row = row;
-                tile.dataset.col = col;
-                tile.classList.add('tile-blocked');
-                
-                // X方块不可点击
-                tile.addEventListener('click', (e) => {
-                    e.stopPropagation();
-                });
-                
-                tileContainer.appendChild(tile);
             }
             
             // 更新分数，并检查撤回奖励里程碑
@@ -1511,13 +1468,10 @@
                 // 简单方案：直接重新渲染，但新方块会有appear动画，合并方块会有merge动画
                 clearTiles();
                 
-                // 重新创建所有方块（包括X方块）
+                // 重新创建所有方块
                 for (let i = 0; i < 4; i++) {
                     for (let j = 0; j < 4; j++) {
-                        if (isBlocked(i, j)) {
-                            // X位置：显示X方块（无动画）
-                            addXTile(i, j);
-                        } else if (grid[i][j] !== 0) {
+                        if (grid[i][j] !== 0) {
                             // 判断是否是新方块（在oldGrid中这个位置是0）
                             const isNew = !oldGrid || oldGrid[i][j] === 0;
                             // 判断是否是合并的方块
@@ -1573,10 +1527,7 @@
                 clearTiles();
                 for (let i = 0; i < 4; i++) {
                     for (let j = 0; j < 4; j++) {
-                        if (isBlocked(i, j)) {
-                            // X位置：显示X方块
-                            addXTile(i, j);
-                        } else if (grid[i][j] !== 0) {
+                        if (grid[i][j] !== 0) {
                             const isMerged = oldGrid && oldGrid[i] && oldGrid[i][j] !== 0 && oldGrid[i][j] !== grid[i][j];
                             addTile(i, j, grid[i][j], !isMerged);
                             
@@ -1590,9 +1541,8 @@
                 }
             }
             
-            // 检查两个数字是否可以合并（X位置不能合并）
+            // 检查两个数字是否可以合并
             function canMerge(a, b) {
-                if (a === -1 || b === -1) return false;
                 if (a % 2 === 1 && b % 2 === 1) return true;
                 if (a % 2 === 0 && b % 2 === 0 && a === b) return true;
                 return false;
@@ -2118,17 +2068,6 @@
             // 启动时：尝试恢复存档，否则新游戏
             const restored = loadGameState();
             if (restored) {
-                // 修复：如果第一关存档没有X标记（-1），补上
-                if (currentLevel === 1) {
-                    for (let i = 0; i < 4; i++) {
-                        for (let j = 0; j < 4; j++) {
-                            if (isBlocked(i, j)) {
-                                grid[i][j] = -1;
-                            }
-                        }
-                    }
-                }
-                
                 activeItem = null;
                 selectedTile = null;
                 mergedValues = [];
