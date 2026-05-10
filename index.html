@@ -384,6 +384,14 @@
                 });
                 setTimeout(function() { playTone(1047, 0.6, 'triangle', 0.5); }, 600);
             }
+
+            function playChallengeSound() {
+                if (!audioCtx) return;
+                // 独特的"叮咚"提醒音效
+                playTone(880, 0.15, 'sine', 0.3);
+                setTimeout(function() { playTone(1100, 0.15, 'sine', 0.3); }, 100);
+                setTimeout(function() { playTone(1320, 0.25, 'triangle', 0.35); }, 200);
+            }
             // ============================
 
             // 判断是否为2的n次幂
@@ -832,6 +840,7 @@
                 grid[randomCell.row][randomCell.col] = value;
                 addTile(randomCell.row, randomCell.col, value, false, false, true);
                 
+                playChallengeSound();
                 showToast(`⚡ 挑战刷新：出现了 ${value}！`);
                 
                 updateMaxTileValue();
