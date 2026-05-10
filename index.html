@@ -34,7 +34,7 @@
     </script>
     <style type="text/tailwindcss">
         @layer utilities {
-            .tile-gray { background-color: #cdc1b4; color: #776e65; }
+            .tile-gray { background-color: #ffffff; color: #776e65; }
             .tile-2 { background-color: #eee4da; color: #776e65; }
             .tile-4 { background-color: #ede0c8; color: #776e65; }
             .tile-8 { background-color: #f2b179; color: #f9f6f2; }
@@ -42,10 +42,10 @@
             .tile-32 { background-color: #f67c5f; color: #f9f6f2; }
             .tile-64 { background-color: #f65e3b; color: #f9f6f2; }
             .tile-128 { background-color: #edcf72; color: #f9f6f2; }
-            .tile-256 { background-color: #edcc61; color: #f9f6f2; }
-            .tile-512 { background-color: #edc850; color: #f9f6f2; }
-            .tile-1024 { background-color: #edc53f; color: #f9f6f2; }
-            .tile-2048 { background-color: #edc22e; color: #f9f6f2; }
+            .tile-256 { background-color: #cbd529; color: #f9f6f2; }
+            .tile-512 { background-color: #79cd44; color: #f9f6f2; }
+            .tile-1024 { background-color: #30ace4; color: #f9f6f2; }
+            .tile-2048 { background-color: #d02c3f; color: #f9f6f2; }
             .tile-2049 { background-color: #e74c3c; color: #f9f6f2; }
             .tile-super { background-color: #3c3a32; color: #f9f6f2; }
             
@@ -97,6 +97,150 @@
                 0% { transform: scale(0) rotate(0deg); opacity: 0; }
                 50% { transform: scale(1.3) rotate(180deg); opacity: 1; }
                 100% { transform: scale(1) rotate(360deg); opacity: 1; }
+            }
+            
+            .help-overlay.hidden {
+                display: none;
+            }
+            
+            /* 悬浮帮助按钮 */
+            .help-button {
+                position: fixed;
+                bottom: 30px;
+                right: 30px;
+                width: 60px;
+                height: 60px;
+                border-radius: 50%;
+                background: linear-gradient(135deg, #9b59b6, #8e44ad);
+                color: white;
+                border: none;
+                box-shadow: 0 4px 12px rgba(155, 89, 182, 0.4);
+                cursor: pointer;
+                font-size: 12px;
+                font-weight: bold;
+                z-index: 1000;
+                transition: all 0.3s ease;
+            }
+            
+            .help-button:hover:not(:disabled) {
+                transform: scale(1.1);
+                box-shadow: 0 6px 20px rgba(155, 89, 182, 0.6);
+            }
+            
+            .help-button:disabled {
+                background: #bdc3c7;
+                cursor: not-allowed;
+                box-shadow: none;
+            }
+            
+            /* 帮助效果选择弹窗 */
+            .help-overlay {
+                position: fixed;
+                top: 0;
+                left: 0;
+                width: 100%;
+                height: 100%;
+                background-color: rgba(0, 0, 0, 0.7);
+                z-index: 9998;
+                display: flex;
+                align-items: center;
+                justify-content: center;
+            }
+            
+            .help-modal {
+                background: #faf8ef;
+                border-radius: 12px;
+                padding: 24px;
+                max-width: 400px;
+                width: 90%;
+                box-shadow: 0 10px 40px rgba(0, 0, 0, 0.3);
+            }
+            
+            .help-modal h3 {
+                text-align: center;
+                font-size: 20px;
+                font-weight: bold;
+                margin-bottom: 16px;
+                color: #776e65;
+            }
+            
+            .help-option {
+                background: white;
+                border: 2px solid #cdc1b4;
+                border-radius: 8px;
+                padding: 16px;
+                margin-bottom: 12px;
+                cursor: pointer;
+                transition: all 0.2s ease;
+            }
+            
+            .help-option:hover {
+                border-color: #9b59b6;
+                background: #f5f0ff;
+                transform: translateY(-2px);
+                box-shadow: 0 4px 12px rgba(155, 89, 182, 0.2);
+            }
+            
+            .help-option h4 {
+                font-size: 16px;
+                font-weight: bold;
+                color: #9b59b6;
+                margin-bottom: 8px;
+            }
+            
+            .help-option p {
+                font-size: 14px;
+                color: #776e65;
+                line-height: 1.4;
+            }
+            
+            .help-cancel {
+                width: 100%;
+                padding: 10px;
+                background: #bdc3c7;
+                color: white;
+                border: none;
+                border-radius: 8px;
+                font-size: 16px;
+                font-weight: bold;
+                cursor: pointer;
+                margin-top: 8px;
+            }
+            
+            .help-cancel:hover {
+                background: #95a5a6;
+            }
+
+            .help-option-disabled {
+                opacity: 0.4;
+                cursor: not-allowed;
+            }
+
+            .help-option-disabled:hover {
+                border-color: #cdc1b4;
+                background: white;
+                transform: none;
+                box-shadow: none;
+            }
+            
+            @keyframes tile-destroy {
+                0% { transform: scale(1); opacity: 1; }
+                50% { transform: scale(1.2); opacity: 0.5; }
+                100% { transform: scale(0); opacity: 0; }
+            }
+            
+            .tile-destroying {
+                animation: tile-destroy 0.3s ease-out forwards;
+            }
+            
+            @keyframes tile-merge {
+                0% { transform: scale(1); }
+                50% { transform: scale(1.3); }
+                100% { transform: scale(1); }
+            }
+            
+            .tile-merging {
+                animation: tile-merge 0.3s ease-out;
             }
             
             .game-overlay {
@@ -170,7 +314,7 @@
         
         <!-- 道具栏 -->
         <div class="bg-board-2049/20 rounded-md p-3 mb-4">
-            <div class="text-xs font-bold mb-2 text-center">道具栏 (点击选择，再点击方块使用)</div>
+            <div class="text-xs font-bold mb-2 text-center" id="item-hint">道具栏 (点击选择，再点击方块使用)</div>
             <div class="grid grid-cols-6 gap-2">
                 <button id="item-swap" class="item-button bg-item-swap text-white rounded-md py-2 px-1 flex flex-col items-center" title="交换棋盘上任意两个方块的位置">
                     <i class="fa fa-exchange text-lg"></i>
@@ -299,7 +443,343 @@
             let nextTileId = 0;
             let tilePositions = {}; // 用于交换道具的第一个选中方块
             let history = []; // 用于撤回的历史记录
+            
+            // 道具使用提示
+            const itemHints = {
+                swap: '交换：选择2个方块交换位置',
+                clear: '清除：点击至少3个相连的同色方块中的1块，合成为平均数',
+                scissors: '剪刀：选择目标方块，使其数字减半',
+                plus: '加一：选择目标方块，使其数字+1',
+                default: '道具栏 (点击选择，再点击方块使用)'
+            };
+            
+            // ============================
+            // 帮助系统（我来助你）
+            // ============================
+            let helpCounts = { merge: 1, destroy: 1, rearrange: 1 }; // 每局各1次
+            let helpActive = false;
+            let helpMode = null; // 'merge', 'destroy', 'rearrange'
+            let helpSelectedTiles = [];
 
+            const helpButton = document.getElementById('help-button');
+            const helpOverlay = document.getElementById('help-overlay');
+            const helpOptions = document.querySelectorAll('.help-option');
+            const helpCancel = document.getElementById('help-cancel');
+
+            // 更新帮助按钮和帮助选项显示
+            function updateHelpUI() {
+                const totalLeft = helpCounts.merge + helpCounts.destroy + helpCounts.rearrange;
+                if (totalLeft <= 0) {
+                    helpButton.disabled = true;
+                    helpButton.title = '本局已用完帮助';
+                } else {
+                    helpButton.disabled = false;
+                    helpButton.title = '我来助你（剩余' + totalLeft + '次）';
+                }
+
+                // 更新每个选项的可用状态
+                helpOptions.forEach(opt => {
+                    const type = opt.dataset.type;
+                    if (helpCounts[type] <= 0) {
+                        opt.classList.add('help-option-disabled');
+                        opt.style.pointerEvents = 'none';
+                    } else {
+                        opt.classList.remove('help-option-disabled');
+                        opt.style.pointerEvents = '';
+                    }
+
+                    // 更新显示剩余次数
+                    const countSpan = opt.querySelector('.help-option-count');
+                    if (countSpan) {
+                        countSpan.textContent = '（剩余' + helpCounts[type] + '次）';
+                    }
+                });
+            }
+
+            // 显示帮助效果选择弹窗
+            function showHelpModal() {
+                if (gameOver || gameWon) {
+                    showToast('游戏已结束！');
+                    return;
+                }
+                const totalLeft = helpCounts.merge + helpCounts.destroy + helpCounts.rearrange;
+                if (totalLeft <= 0) {
+                    showToast('本局帮助已用完！');
+                    return;
+                }
+                updateHelpUI();
+                helpOverlay.classList.remove('hidden');
+            }
+
+            // 隐藏帮助效果选择弹窗
+            function hideHelpModal() {
+                helpOverlay.classList.add('hidden');
+            }
+            
+            // 开始帮助效果
+            function startHelpMode(mode) {
+                if (!helpCounts[mode] || helpCounts[mode] <= 0) {
+                    showToast('该效果本局已使用！');
+                    return;
+                }
+
+                helpActive = true;
+                helpMode = mode;
+                helpSelectedTiles = [];
+                helpCounts[mode]--;   // 消耗1次
+                hideHelpModal();
+
+                if (mode === 'merge') {
+                    showToast('融合：请点击1个方块');
+                } else if (mode === 'destroy') {
+                    const totalTiles = countNonZeroTiles();
+                    const needCount = Math.min(3, totalTiles);
+                    showToast(`爆炸：请点击${needCount}个方块（共${totalTiles}块）`);
+                } else if (mode === 'rearrange') {
+                    executeRearrange();
+                }
+
+                if (mode !== 'rearrange') {
+                    const tiles = tileContainer.querySelectorAll('div');
+                    tiles.forEach(tile => {
+                        tile.classList.add('tile-highlight');
+                    });
+                }
+
+                updateHelpUI();
+            }
+
+            // 统计棋盘上非零方块数量
+            function countNonZeroTiles() {
+                let count = 0;
+                for (let i = 0; i < 4; i++) {
+                    for (let j = 0; j < 4; j++) {
+                        if (grid[i][j] > 0) count++;
+                    }
+                }
+                return count;
+            }
+
+            // 获取爆炸需要选择的方块数（不足3块时选全部）
+            function getDestroyTargetCount() {
+                const total = countNonZeroTiles();
+                return Math.min(3, total);
+            }
+            
+            // 执行融合效果
+            function executeMerge(row, col) {
+                const tileValue = grid[row][col];
+                if (tileValue === 0) {
+                    showToast('请选择一个有数字的方块！');
+                    return;
+                }
+                
+                // 收集九宫格内的所有数字
+                const values = [];
+                for (let i = Math.max(0, row - 1); i <= Math.min(3, row + 1); i++) {
+                    for (let j = Math.max(0, col - 1); j <= Math.min(3, col + 1); j++) {
+                        if (grid[i][j] > 0) {
+                            values.push(grid[i][j]);
+                        }
+                    }
+                }
+                
+                if (values.length === 0) return;
+                
+                // 计算平均数
+                const avg = Math.floor(values.reduce((a, b) => a + b, 0) / values.length);
+                
+                // 将点击位置设为平均数，周围8格清空
+                for (let i = Math.max(0, row - 1); i <= Math.min(3, row + 1); i++) {
+                    for (let j = Math.max(0, col - 1); j <= Math.min(3, col + 1); j++) {
+                        if (i === row && j === col) {
+                            // 点击位置：设为平均数
+                            grid[i][j] = avg;
+                        } else {
+                            // 周围8格：清空
+                            grid[i][j] = 0;
+                        }
+                    }
+                }
+                
+                // 更新显示
+                helpActive = false;
+                helpMode = null;
+                updateHelpUI();
+                pushHistory();
+                renderTiles(grid);
+                updateMaxTileValue();
+                saveGameState();
+                
+                showToast(`融合完成！方块已变为${avg}`);
+                playItemSound('swap');
+                
+                // 检查胜利
+                checkWin();
+            }
+            
+            // 执行爆炸效果
+            function executeDestroy(row, col) {
+                // 防抖：如果帮助模式已结束（已被处理过），忽略重复调用
+                if (!helpActive) return;
+
+                // 检查是否已选中（重复点击则取消选择）
+                const existIdx = helpSelectedTiles.findIndex(p => p.row === row && p.col === col);
+                const tiles = tileContainer.querySelectorAll('div');
+
+                if (existIdx !== -1) {
+                    // 取消选择：移除高光，从列表中删除
+                    helpSelectedTiles.splice(existIdx, 1);
+                    tiles.forEach(tile => {
+                        if (parseInt(tile.dataset.row) === row && parseInt(tile.dataset.col) === col) {
+                            tile.classList.remove('tile-selected');
+                            tile.classList.add('tile-highlight');
+                        }
+                    });
+                    const target = getDestroyTargetCount();
+                    showToast(`已取消选择，已选${helpSelectedTiles.length}/${target}`);
+                    return;
+                }
+
+                // 新选择：添加高光
+                helpSelectedTiles.push({ row, col });
+                tiles.forEach(tile => {
+                    if (parseInt(tile.dataset.row) === row && parseInt(tile.dataset.col) === col) {
+                        tile.classList.add('tile-selected');
+                        tile.classList.remove('tile-highlight');
+                    }
+                });
+
+                const target = getDestroyTargetCount();
+
+                if (helpSelectedTiles.length < target) {
+                    showToast(`已选择${helpSelectedTiles.length}/${target}，继续点击`);
+                    return;
+                }
+
+                // 选够数量，执行摧毁
+                const destroyedCount = helpSelectedTiles.length;
+                const totalBefore = countNonZeroTiles();
+                helpSelectedTiles.forEach(pos => {
+                    grid[pos.row][pos.col] = 0;
+                });
+
+                // 更新显示
+                helpActive = false;
+                helpMode = null;
+                helpSelectedTiles = [];
+                updateHelpUI();
+                pushHistory();
+                renderTiles(grid);
+
+                // 如果清空了所有方块，自动生成1个新方块
+                if (totalBefore === destroyedCount) {
+                    addRandomTile();
+                }
+
+                updateMaxTileValue();
+                saveGameState();
+
+                showToast(`爆炸完成！已摧毁${destroyedCount}个方块`);
+                playItemSound('clear');
+                checkWin();
+            }
+            
+            // 执行整队效果
+            function executeRearrange() {
+                // 收集所有非零数字
+                const values = [];
+                for (let i = 0; i < 4; i++) {
+                    for (let j = 0; j < 4; j++) {
+                        if (grid[i][j] > 0) {
+                            values.push(grid[i][j]);
+                        }
+                    }
+                }
+                
+                // 从小到大排序
+                values.sort((a, b) => a - b);
+                
+                // S形排列：第0行左→右，第1行右→左，第2行左→右，第3行右→左
+                const newGrid = Array(4).fill().map(() => Array(4).fill(0));
+                let index = 0;
+                for (let i = 0; i < 4; i++) {
+                    if (i % 2 === 0) {
+                        // 偶数行：左→右
+                        for (let j = 0; j < 4; j++) {
+                            if (index < values.length) {
+                                newGrid[i][j] = values[index++];
+                            }
+                        }
+                    } else {
+                        // 奇数行：右→左
+                        for (let j = 3; j >= 0; j--) {
+                            if (index < values.length) {
+                                newGrid[i][j] = values[index++];
+                            }
+                        }
+                    }
+                }
+                
+                // 更新grid
+                for (let i = 0; i < 4; i++) {
+                    for (let j = 0; j < 4; j++) {
+                        grid[i][j] = newGrid[i][j];
+                    }
+                }
+                
+                // 更新显示
+                helpActive = false;
+                helpMode = null;
+                updateHelpUI();
+                pushHistory();
+                renderTiles(grid);
+                updateMaxTileValue();
+                saveGameState();
+                
+                showToast('整队完成！方块已按S形排列');
+                playItemSound('shuffle');
+                
+                // 检查胜利
+                checkWin();
+            }
+            
+            // 帮助效果选择
+            helpOptions.forEach(option => {
+                option.addEventListener('click', () => {
+                    const type = option.getAttribute('data-type');
+                    startHelpMode(type);
+                });
+            });
+            
+            // 帮助按钮点击
+            helpButton.addEventListener('click', () => {
+                showHelpModal();
+            });
+            
+            // 取消按钮
+            helpCancel.addEventListener('click', () => {
+                hideHelpModal();
+            });
+            
+            // ESC取消帮助
+            document.addEventListener('keydown', (e) => {
+                if (helpActive && e.key === 'Escape') {
+                    helpActive = false;
+                    helpMode = null;
+                    helpSelectedTiles = [];
+                    hideHelpModal();
+                    showToast('已取消帮助效果');
+
+                    // 移除所有高光
+                    const tiles = tileContainer.querySelectorAll('div');
+                    tiles.forEach(tile => {
+                        tile.classList.remove('tile-highlight');
+                        tile.classList.remove('tile-selected');
+                    });
+                }
+            });
+            
             // 挑战系统
             let moveCount = 0;
             let refreshInterval = 30;
@@ -427,6 +907,7 @@
                     gameOver,
                     gameWon,
                     currentLevel,
+                    helpCounts,
                     history,
                     undoMilestoneCount
                 };
@@ -449,6 +930,7 @@
                     gameOver = state.gameOver;
                     gameWon = state.gameWon;
                     currentLevel = state.currentLevel || 1;
+                    helpCounts = state.helpCounts || { merge: 1, destroy: 1, rearrange: 1 };
                     history = state.history || [];
                     undoMilestoneCount = state.undoMilestoneCount || 0;
                     return true;
@@ -474,6 +956,13 @@
                 selectedTile = null;
                 history = [];
                 undoMilestoneCount = 0;
+                
+                // 重置帮助系统
+                helpCounts = { merge: 1, destroy: 1, rearrange: 1 };
+                helpActive = false;
+                helpMode = null;
+                helpSelectedTiles = [];
+                updateHelpUI();
                 
                 // 重置挑战系统
                 moveCount = 0;
@@ -583,6 +1072,17 @@
                 if (isSelected) tile.classList.add('tile-selected');
                 
                 tile.addEventListener('click', () => {
+                    // 帮助模式优先处理
+                    if (helpActive && helpMode) {
+                        if (helpMode === 'merge') {
+                            executeMerge(row, col);
+                        } else if (helpMode === 'destroy') {
+                            executeDestroy(row, col);
+                        }
+                        return;
+                    }
+                    
+                    // 道具系统
                     if (activeItem && grid[row][col] !== 0) {
                         useItemOnTile(row, col);
                     }
@@ -777,7 +1277,7 @@
             
             // 移动方块
             function move(direction) {
-                if (gameOver || gameWon || activeItem) return;
+                if (gameOver || gameWon || activeItem || helpActive) return;
                 
                 let moved = false;
                 const oldGrid = JSON.parse(JSON.stringify(grid));
@@ -1200,9 +1700,11 @@
                 if (activeItem === type) {
                     activeItem = null;
                     selectedTile = null;
+                    document.getElementById('item-hint').textContent = itemHints.default;
                 } else {
                     activeItem = type;
                     selectedTile = null;
+                    document.getElementById('item-hint').textContent = itemHints[type];
                     
                     if (type === 'shuffle') {
                         useShuffleItem();
@@ -1337,6 +1839,7 @@
                     items[activeItem]--;
                     activeItem = null;
                     selectedTile = null;
+                    document.getElementById('item-hint').textContent = itemHints.default;
                     
                     updateItemDisplay();
                     renderTilesWithAnimation(oldGrid);
@@ -1377,6 +1880,7 @@
                 items.shuffle--;
                 activeItem = null;
                 selectedTile = null;
+                document.getElementById('item-hint').textContent = itemHints.default;
                 
                 updateItemDisplay();
                 renderTilesWithAnimation(oldGrid);
@@ -1398,6 +1902,7 @@
                 if (activeItem && e.key === 'Escape') {
                     activeItem = null;
                     selectedTile = null;
+                    document.getElementById('item-hint').textContent = itemHints.default;
                     updateItemDisplay();
                     
                     const tiles = tileContainer.querySelectorAll('div');
@@ -1494,6 +1999,7 @@
                 updateItemDisplay();
                 updateChallengeDisplay();
                 updateLevelDisplay();
+                updateHelpUI();
                 clearTiles();
                 gameOverlay.classList.add('hidden');
                 renderTiles(grid);
@@ -1503,5 +2009,32 @@
             }
         });
     </script>
+    
+    <!-- 悬浮帮助按钮 -->
+    <button id="help-button" class="help-button" title="我来助你（每局3次）">我来助你</button>
+    
+    <!-- 帮助效果选择弹窗 -->
+    <div id="help-overlay" class="help-overlay hidden">
+        <div class="help-modal">
+            <h3>选择帮助效果</h3>
+            
+            <div class="help-option" data-type="merge">
+                <h4>🔮 融合 <span class="help-option-count">（剩余1次）</span></h4>
+                <p>点击1个方块，该方块变为九宫格平均数，周围8格清空</p>
+            </div>
+            
+            <div class="help-option" data-type="destroy">
+                <h4>💥 爆炸 <span class="help-option-count">（剩余1次）</span></h4>
+                <p>点击方块，直接摧毁这些方块（变为空）</p>
+            </div>
+            
+            <div class="help-option" data-type="rearrange">
+                <h4>📐 整队 <span class="help-option-count">（剩余1次）</span></h4>
+                <p>将所有方块按数字从小到大，以S形顺序排列</p>
+            </div>
+            
+            <button id="help-cancel" class="help-cancel">取消</button>
+        </div>
+    </div>
 </body>
 </html>
