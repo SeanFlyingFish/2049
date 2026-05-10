@@ -148,7 +148,7 @@
         <!-- 挑战进度条 -->
         <div class="mb-4">
             <div class="flex justify-between text-xs mb-1">
-                <span class="font-bold text-challenge">随机数生成进度</span>
+                <span class="font-bold text-challenge">随机挑战生成进度</span>
                 <span id="challenge-count">0 / 30</span>
             </div>
             <div class="w-full bg-board-2049/30 rounded-full h-2">
@@ -158,7 +158,7 @@
         
         <!-- 游戏说明和新游戏按钮 -->
         <div class="flex justify-between items-center mb-4">
-            <p class="text-sm">合并相同偶数或相邻奇数，得到 <strong>2049</strong>！</p>
+            <p class="text-sm font-bold text-challenge" id="level-info">第1关：目标 129</p>
             <button id="new-game" class="bg-board-2049 hover:bg-board-2049/90 text-white font-bold py-2 px-4 rounded transition-colors">
                 新游戏
             </button>
@@ -234,10 +234,10 @@
         <!-- 操作提示 -->
         <div class="mt-6 text-center text-sm">
             <p>使用 <strong>方向键</strong> 或 <strong>滑动屏幕</strong> 移动方块</p>
-            <p class="mt-1">每次合成32及以上数字可获得1个道具</p>
-            <p class="mt-1 text-challenge font-bold">每移动一定次数会随机刷新一个随机数方块！</p>
-            <p class="mt-1 text-green-600 font-bold">只要有道具，棋盘满了也不会输！</p>
-            <p class="mt-1 text-blue-600 font-bold">2个奇数可合并，2个相同的偶数可合并</p>
+            <p class="mt-1 text-challenge font-bold">任意奇数均可合并，仅相同偶数可合并！</p>
+            <p class="mt-1 text-green-600 font-bold">每次合成32及以上数字可获得1个道具！</p>
+            <p class="mt-1 text-blue-600 font-bold">每移动一定次数会生成1个随机挑战数字！</p>
+            <p class="mt-1">只要有道具，棋盘满了也不会输！</p>
         </div>
     </div>
 
@@ -277,6 +277,8 @@
             let bestScore = parseInt(localStorage.getItem('2049-best-score') || '0');
             let gameOver = false;
             let gameWon = false;
+            let currentLevel = 1;
+            const levelTargets = { 1: 129, 2: 2049 };
             
             // 道具系统
             let items = {
@@ -420,6 +422,7 @@
                     maxTileValue,
                     gameOver,
                     gameWon,
+                    currentLevel,
                     history,
                     undoMilestoneCount
                 };
@@ -441,6 +444,7 @@
                     maxTileValue = state.maxTileValue;
                     gameOver = state.gameOver;
                     gameWon = state.gameWon;
+                    currentLevel = state.currentLevel || 1;
                     history = state.history || [];
                     undoMilestoneCount = state.undoMilestoneCount || 0;
                     return true;
@@ -473,10 +477,12 @@
                 maxTileValue = 0;
                 mergedValues = [];
                 maxMergedPowerOf2 = 4;
+                currentLevel = 1;
                 
                 updateScore();
                 updateItemDisplay();
                 updateChallengeDisplay();
+                updateLevelDisplay();
                 clearTiles();
                 gameOverlay.classList.add('hidden');
                 
@@ -612,6 +618,11 @@
                 challengeProgress.style.width = `${(moveCount / refreshInterval) * 100}%`;
             }
             
+            // 更新关卡显示
+            function updateLevelDisplay() {
+                document.getElementById('level-info').textContent = `第${currentLevel}关：目标 ${levelTargets[currentLevel]}`;
+            }
+            
             // 更新道具显示
             function updateItemDisplay() {
                 for (const [type, count] of Object.entries(items)) {
@@ -643,16 +654,51 @@
                 }
             }
             
-            // 检查胜利（任何方式产生2049都算赢），返回是否刚获胜
+            // 检查胜利（根据当前关卡目标），返回是否刚获胜
             function checkWin() {
                 if (gameWon) return false;
+                var target = levelTargets[currentLevel];
                 for (var i = 0; i < 4; i++) {
                     for (var j = 0; j < 4; j++) {
-                        if (grid[i][j] === 2049) {
-                            gameWon = true;
-                            playWinSound();
-                            setTimeout(function() { showOverlay('你赢了！'); }, 300);
-                            return true;
+                        if (grid[i][j] === target) {
+                            if (currentLevel === 1) {
+                                // 第一关通关，重置盘面和道具，进入第二关
+                                currentLevel = 2;
+                                // 重置分数
+                                score = 0;
+                                // 重置盘面
+                                grid = Array(4).fill().map(() => Array(4).fill(0));
+                                // 重置道具
+                                items = { swap: 1, clear: 1, scissors: 1, shuffle: 1, plus: 1, undo: 3 };
+                                activeItem = null;
+                                selectedTile = null;
+                                // 重置挑战系统
+                                moveCount = 0;
+                                maxMergedPowerOf2 = 4;
+                                mergedValues = [];
+                                // 清空方块显示
+                                clearTiles();
+                                // 生成两个新方块
+                                addRandomTile();
+                                addRandomTile();
+                                // 更新显示
+                                updateScore();
+                                updateItemDisplay();
+                                updateChallengeDisplay();
+                                updateLevelDisplay();
+                                // 保存状态
+                                saveGameState();
+                                // 播放音效并显示提示
+                                playWinSound();
+                                showToast('🎉 第一关通关！进入第二关，目标：2049');
+                                return true;
+                            } else if (currentLevel === 2) {
+                                // 第二关通关，游戏胜利
+                                gameWon = true;
+                                playWinSound();
+                                setTimeout(function() { showOverlay('你赢了！'); }, 300);
+                                return true;
+                            }
                         }
                     }
                 }
@@ -669,6 +715,7 @@
                     moveCount: moveCount,
                     maxTileValue: maxTileValue,
                     items: JSON.parse(JSON.stringify(items)),
+                    currentLevel: currentLevel,
                     undoMilestoneCount: undoMilestoneCount
                 });
                 // 只保留最近20步
@@ -695,6 +742,7 @@
                 score = prev.score;
                 moveCount = prev.moveCount;
                 maxTileValue = prev.maxTileValue;
+                currentLevel = prev.currentLevel || 1;
                 // 恢复道具但不恢复undo数量（已经消耗了1次）
                 const restoredItems = JSON.parse(JSON.stringify(prev.items));
                 restoredItems.undo = items.undo;
@@ -707,6 +755,7 @@
                 scoreDisplay.textContent = score;
                 updateItemDisplay();
                 updateChallengeDisplay();
+                updateLevelDisplay();
                 renderTiles(prev.grid); // 传同一个grid，无合并动画
                 gameOverlay.classList.add('hidden');
 
@@ -1440,6 +1489,7 @@
                 updateScore();
                 updateItemDisplay();
                 updateChallengeDisplay();
+                updateLevelDisplay();
                 clearTiles();
                 gameOverlay.classList.add('hidden');
                 renderTiles(grid);
