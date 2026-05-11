@@ -270,29 +270,52 @@
             .challenge-indicator {
                 background: linear-gradient(90deg, #9b59b6, #8e44ad);
             }
-
+            /* 击退全局呼吸发光 */
+            @keyframes defend-glow {
+                0%  { box-shadow: 0 0 6px 2px rgba(241, 196, 15, 0.6); }
+                50% { box-shadow: 0 0 18px 6px rgba(241, 196, 15, 0.9); }
+                100%{ box-shadow: 0 0 6px 2px rgba(241, 196, 15, 0.6); }
+            }
+            .defend-glow-active {
+                animation: defend-glow 0.6s ease-in-out 3;
+            }
             /* 连击击退飘字 */
             .defend-text {
                 position: fixed;
-                top: 40%;
+                top: 35%;
                 left: 50%;
                 transform: translateX(-50%);
-                font-size: 28px;
+                font-size: 40px;
                 font-weight: bold;
                 color: #f1c40f;
                 text-shadow: 
-                    -2px -2px 0 #9b59b6,
-                    2px -2px 0 #9b59b6,
-                    -2px 2px 0 #9b59b6,
-                    2px 2px 0 #9b59b6;
+                    -3px -3px 0 #9b59b6,
+                    3px -3px 0 #9b59b6,
+                    -3px 3px 0 #9b59b6,
+                    3px 3px 0 #9b59b6;
                 pointer-events: none;
                 z-index: 99999;
-                animation: defend-fly 1.2s ease-out forwards;
+                animation: defend-fly 1.4s ease-out forwards;
             }
 
             @keyframes defend-fly {
-                0% { opacity: 1; transform: translate(-50%, 0); }
-                100% { opacity: 0; transform: translate(-50%, -60px); }
+                 0% { opacity: 1; transform: translate(-50%, 0) scale(1); }
+                 50%{ transform: translate(-50%, -20px) scale(1.2); }
+                100% { opacity: 0; transform: translate(-50%, -60px) scale(1.3); }
+            }
+
+            /* 缓冲层基础样式 */
+            .buffer-layer {
+              position: absolute;
+              top: 0;
+              left: 0;
+              height: 100%;
+              border-radius: 9999px;
+              transition: all 0.3s ease;
+            }
+            /* 进度条容器强制隐藏溢出内容 */
+            .w-full.bg-board-2049\/30 {
+              overflow: hidden !important;
             }
         }
     </style>
@@ -917,11 +940,25 @@
 
             function playChallengeSound() {
                 if (!audioCtx) return;
-                // 独特的"叮咚"提醒音效
-                playTone(880, 0.15, 'sine', 0.3);
-                setTimeout(function() { playTone(1100, 0.15, 'sine', 0.3); }, 100);
-                setTimeout(function() { playTone(1320, 0.25, 'triangle', 0.35); }, 200);
+                // 低 → 中 → 高 卡点上扬，干净有力
+                playTone(196, 0.12, 'sine', 0.55);
+                setTimeout(()=>playTone(247, 0.12, 'sine', 0.55), 100);
+                setTimeout(()=>playTone(392, 0.22, 'sine', 0.6), 200);
             }
+
+// 击退炸裂专属音效
+function playDefendEpicSound() {
+    if (!audioCtx) return;
+    // 改节奏：长停顿 + 紧凑后两音，大气 噔——噔噔！
+    playTone(520, 0.18, 'sine', 0.55);
+    setTimeout(function() { 
+        playTone(660, 0.15, 'sine', 0.55); 
+    }, 180);
+    setTimeout(function() { 
+        playTone(880, 0.3, 'triangle', 0.7); 
+    }, 260);
+}
+
             // ============================
 
             // 判断是否为2的n次幂
@@ -1173,31 +1210,73 @@
                 updateChallengeDisplay();
             }
             
-            // 更新挑战显示（紫色=进度，黄色=缓冲）
+// 更新挑战显示（分层缓冲条，五色循环，永不溢出）
 function updateChallengeDisplay() {
     challengeCount.textContent = `${moveCount} / ${refreshInterval}`;
-    // 紫色进度条
+    // 1. 更新紫色基础进度条
     challengeProgress.style.width = `${(moveCount / refreshInterval) * 100}%`;
-    // 黄色缓冲条（叠加显示）
-    const bufferPercent = (challengeBuffer / refreshInterval) * 100;
-    // 动态创建/更新缓冲条样式
-    let bufferBar = document.getElementById('challenge-buffer');
-    if (!bufferBar) {
-        bufferBar = document.createElement('div');
-        bufferBar.id = 'challenge-buffer';
-        bufferBar.className = 'bg-yellow-400 h-2 rounded-full transition-all duration-300 absolute';
-        document.querySelector('.bg-board-2049\\/30').appendChild(bufferBar);
+
+    // 2. 分层缓冲条配置：黄、橙、红、蓝、绿 循环
+    const bufferColors = ['bg-yellow-400', 'bg-orange-500', 'bg-red-500', 'bg-blue-500', 'bg-green-500'];
+    const container = document.querySelector('.bg-board-2049\\/30');
+    // 清空旧的缓冲层
+    const oldLayers = container.querySelectorAll('.buffer-layer');
+    oldLayers.forEach(layer => layer.remove());
+
+    // 3. 计算缓冲层数与剩余值
+    const totalBuffer = challengeBuffer;
+    const layerMax = refreshInterval; // 一层的最大值 = 挑战阈值
+    const fullLayers = Math.floor(totalBuffer / layerMax); // 满层数
+    const remainBuffer = totalBuffer % layerMax; // 最后一层剩余值
+
+    // 4. 生成所有满层（每层100%宽度，循环染色）
+    for (let i = 0; i < fullLayers; i++) {
+        const color = bufferColors[i % bufferColors.length];
+        createBufferLayer(container, color, '100%', i + 1);
     }
-    bufferBar.style.width = `${bufferPercent}%`;
+
+    // 5. 生成最后一层（剩余宽度，接续染色）
+    if (remainBuffer > 0) {
+        const color = bufferColors[fullLayers % bufferColors.length];
+        const width = `${(remainBuffer / layerMax) * 100}%`;
+        createBufferLayer(container, color, width, fullLayers + 1);
+    }
 }
 
-// 显示击退飘字
+// 工具函数：创建单个缓冲层
+function createBufferLayer(container, colorClass, width, zIndex) {
+    const layer = document.createElement('div');
+    layer.className = `${colorClass} h-2 rounded-full transition-all duration-300 absolute buffer-layer`;
+    layer.style.width = width;
+    layer.style.left = '0';
+    layer.style.top = '0';
+    layer.style.zIndex = zIndex; // 层叠顺序
+    container.appendChild(layer);
+}
+
+// 显示击退飘字 + 全局呼吸灯发光 + 燃向音效
 function showDefendText() {
+    // 1. 播放激动人心击退音效
+    playDefendEpicSound();
+
+    // 2. 飘字放大弹出
     const text = document.createElement('div');
     text.className = 'defend-text';
     text.textContent = '击退！';
     document.body.appendChild(text);
-    setTimeout(() => text.remove(), 1200);
+    setTimeout(() => text.remove(), 1400);
+
+    // 3. 所有方块呼吸发光
+    const allTiles = tileContainer.querySelectorAll('div');
+    allTiles.forEach(tile => {
+        tile.classList.add('defend-glow-active');
+        setTimeout(()=>tile.classList.remove('defend-glow-active'), 1800);
+    });
+
+    // 4. 进度条整体呼吸发光
+    const progressWrap = document.querySelector('.bg-board-2049\\/30');
+    progressWrap.classList.add('defend-glow-active');
+    setTimeout(()=>progressWrap.classList.remove('defend-glow-active'), 1800);
 }
             
             // 更新关卡显示
