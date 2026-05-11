@@ -270,6 +270,30 @@
             .challenge-indicator {
                 background: linear-gradient(90deg, #9b59b6, #8e44ad);
             }
+
+            /* 连击击退飘字 */
+            .defend-text {
+                position: fixed;
+                top: 40%;
+                left: 50%;
+                transform: translateX(-50%);
+                font-size: 28px;
+                font-weight: bold;
+                color: #f1c40f;
+                text-shadow: 
+                    -2px -2px 0 #9b59b6,
+                    2px -2px 0 #9b59b6,
+                    -2px 2px 0 #9b59b6,
+                    2px 2px 0 #9b59b6;
+                pointer-events: none;
+                z-index: 99999;
+                animation: defend-fly 1.2s ease-out forwards;
+            }
+
+            @keyframes defend-fly {
+                0% { opacity: 1; transform: translate(-50%, 0); }
+                100% { opacity: 0; transform: translate(-50%, -60px); }
+            }
         }
     </style>
 </head>
@@ -299,7 +323,7 @@
                 <span class="font-bold text-challenge">随机挑战生成进度</span>
                 <span id="challenge-count">0 / 30</span>
             </div>
-            <div class="w-full bg-board-2049/30 rounded-full h-2">
+            <div class="w-full bg-board-2049/30 rounded-full h-2 relative">
                 <div id="challenge-progress" class="challenge-indicator h-2 rounded-full transition-all duration-300" style="width: 0%"></div>
             </div>
         </div>
@@ -487,7 +511,7 @@
                 const totalLeft = helpCounts.merge + helpCounts.destroy + helpCounts.rearrange;
                 if (totalLeft <= 0) {
                     helpButton.disabled = true;
-                    helpButton.title = '本局已用完帮助';
+                    helpButton.title = '次数已耗尽';
                 } else {
                     helpButton.disabled = false;
                     helpButton.title = '我来助你（剩余' + totalLeft + '次）';
@@ -520,7 +544,7 @@
                 }
                 const totalLeft = helpCounts.merge + helpCounts.destroy + helpCounts.rearrange;
                 if (totalLeft <= 0) {
-                    showToast('本局帮助已用完！');
+                    showToast('次数已耗尽！');
                     return;
                 }
                 updateHelpUI();
@@ -786,7 +810,7 @@
                     helpMode = null;
                     helpSelectedTiles = [];
                     hideHelpModal();
-                    showToast('已取消帮助效果');
+                    showToast('取消特殊效果');
 
                     // 移除所有高光
                     const tiles = tileContainer.querySelectorAll('div');
@@ -797,13 +821,16 @@
                 }
             });
             
-            // 挑战系统
-            let moveCount = 0;
-            let refreshInterval = 30;
-            let maxTileValue = 0;
-            
-            // 本次移动中合成的次数和数值
-            let mergedValues = [];
+           // 挑战系统
+           let moveCount = 0;
+           let refreshInterval = 30;
+           let maxTileValue = 0;
+           let challengeBuffer = 0; // 黄色缓冲（击退额度，实时消耗）
+           // 连击专用：连续合成≥32计数
+           let combo32Count = 0;  
+           
+           // 本次移动中合成的次数和数值
+           let mergedValues = [];
             
             // 挑战刷新随机数范围上限（仅2个相同2的n次幂合成时更新）
             let maxMergedPowerOf2 = 4;
@@ -988,6 +1015,7 @@
                 mergedValues = [];
                 maxMergedPowerOf2 = 4;
                 currentLevel = 1;
+                combo32Count = 0;
 
                 updateScore();
                 updateItemDisplay();
@@ -1145,11 +1173,32 @@
                 updateChallengeDisplay();
             }
             
-            // 更新挑战显示
-            function updateChallengeDisplay() {
-                challengeCount.textContent = `${moveCount} / ${refreshInterval}`;
-                challengeProgress.style.width = `${(moveCount / refreshInterval) * 100}%`;
-            }
+            // 更新挑战显示（紫色=进度，黄色=缓冲）
+function updateChallengeDisplay() {
+    challengeCount.textContent = `${moveCount} / ${refreshInterval}`;
+    // 紫色进度条
+    challengeProgress.style.width = `${(moveCount / refreshInterval) * 100}%`;
+    // 黄色缓冲条（叠加显示）
+    const bufferPercent = (challengeBuffer / refreshInterval) * 100;
+    // 动态创建/更新缓冲条样式
+    let bufferBar = document.getElementById('challenge-buffer');
+    if (!bufferBar) {
+        bufferBar = document.createElement('div');
+        bufferBar.id = 'challenge-buffer';
+        bufferBar.className = 'bg-yellow-400 h-2 rounded-full transition-all duration-300 absolute';
+        document.querySelector('.bg-board-2049\\/30').appendChild(bufferBar);
+    }
+    bufferBar.style.width = `${bufferPercent}%`;
+}
+
+// 显示击退飘字
+function showDefendText() {
+    const text = document.createElement('div');
+    text.className = 'defend-text';
+    text.textContent = '击退！';
+    document.body.appendChild(text);
+    setTimeout(() => text.remove(), 1200);
+}
             
             // 更新关卡显示
             function updateLevelDisplay() {
@@ -1294,6 +1343,7 @@
 
                 saveGameState();
                 showToast('✅ 已撤回上一步！');
+                combo32Count = 0;
             }
             
             // 检查玩家是否有可用道具
@@ -1327,8 +1377,50 @@
                     for (var mi = 0; mi < mergedValues.length; mi++) {
                         playMergeSound(mergedValues[mi]);
                     }
-                    
-                    moveCount++;
+                                        
+// ========== 全新击退结算逻辑：优先抵扣moveCount，剩余进黄色缓冲 ==========
+const current32Merge = mergedValues.filter(v => v >= 32).length;
+
+if (current32Merge > 0) {
+    // 连击计数递增
+    combo32Count++;
+    // 连击倍率：2^(n-1)
+    const addDefend = Math.pow(2, combo32Count - 1);
+
+    // 核心规则：优先抵扣紫色moveCount
+    let deduct = Math.min(addDefend, moveCount);
+    let remainDefend = addDefend - deduct;
+
+    // 抵扣进度
+    moveCount -= deduct;
+    // 剩余击退值存入黄色缓冲
+    challengeBuffer += remainDefend;
+
+    // 仅第二次及以上连击才飘击退文字
+    if (combo32Count >= 2) {
+        showDefendText();
+    }
+
+    // 友好提示
+    if(deduct > 0 && remainDefend > 0){
+        showToast(`🔥 连击${combo32Count}次！抵扣进度${deduct}，剩余${remainDefend}存入缓冲`);
+    }else if(deduct > 0){
+        showToast(`🔥 连击${combo32Count}次！直接抵扣进度${deduct}`);
+    }else{
+        showToast(`🔥 连击${combo32Count}次！全部${addDefend}存入击退缓冲`);
+    }
+} else {
+    // 无32+合成，连击断档重置
+    combo32Count = 0;
+}
+
+// 原有每次移动消耗逻辑保留不变
+if (challengeBuffer > 0) {
+    challengeBuffer--; 
+} else {
+    moveCount++; 
+}
+// ======================================================================
                     
                     // 保存历史
                     pushHistory();
@@ -1490,17 +1582,6 @@
                         }
                     }
                 }
-            }
-            
-            // 根据位置查找tile元素
-            function findTileElementAtPosition(row, col) {
-                const tiles = tileContainer.querySelectorAll('div');
-                for (let tile of tiles) {
-                    if (parseInt(tile.dataset.row) === row && parseInt(tile.dataset.col) === col) {
-                        return tile;
-                    }
-                }
-                return null;
             }
             
             // 根据位置查找tile元素
@@ -1911,6 +1992,8 @@
                     selectedTile = null;
                     document.getElementById('item-hint').textContent = itemHints.default;
                     
+                    combo32Count = 0;
+                    
                     updateItemDisplay();
                     renderTilesWithAnimation(oldGrid);
                     updateMaxTileValue();
@@ -1965,7 +2048,8 @@
                 saveGameState();
                 
                 showToast('所有方块已打乱！');
-                
+                combo32Count = 0;
+
                 if (!checkWin() && isGameOver()) {
                     gameOver = true;
                     showOverlay('游戏结束！');
@@ -2096,17 +2180,17 @@
             
             <div class="help-option" data-type="merge">
                 <h4>🔮 融合 <span class="help-option-count">（剩余1次）</span></h4>
-                <p>点击1个方块，该方块变为九宫格平均数，周围8格清空</p>
+                <p>点击1个方块，融合周围的数字变为平均数。</p>
             </div>
             
             <div class="help-option" data-type="destroy">
                 <h4>💥 爆炸 <span class="help-option-count">（剩余1次）</span></h4>
-                <p>点击方块，直接摧毁这些方块（变为空）</p>
+                <p>选择至多3个方块，直接摧毁。</p>
             </div>
             
             <div class="help-option" data-type="rearrange">
                 <h4>📐 整队 <span class="help-option-count">（剩余1次）</span></h4>
-                <p>将所有方块按数字从小到大，以S形顺序排列</p>
+                <p>将所有方块按数字从小到大，以S形顺序排列。</p>
             </div>
             
             <button id="help-cancel" class="help-cancel">取消</button>
