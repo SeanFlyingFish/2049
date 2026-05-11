@@ -846,7 +846,7 @@
             
            // 挑战系统
            let moveCount = 0;
-           let refreshInterval = 30;
+           let refreshInterval = 25;
            let maxTileValue = 0;
            let challengeBuffer = 0; // 黄色缓冲（击退额度，实时消耗）
            // 连击专用：连续合成≥32计数
@@ -990,7 +990,9 @@ function playDefendEpicSound() {
                     currentLevel,
                     helpCounts,
                     history,
-                    undoMilestoneCount
+                    undoMilestoneCount,
+                    combo32Count,
+                    challengeBuffer
                 };
                 localStorage.setItem(SAVE_KEY, JSON.stringify(state));
             }
@@ -1014,6 +1016,8 @@ function playDefendEpicSound() {
                     helpCounts = state.helpCounts || { merge: 1, destroy: 1, rearrange: 1 };
                     history = state.history || [];
                     undoMilestoneCount = state.undoMilestoneCount || 0;
+                    combo32Count = state.combo32Count || 0;
+                    challengeBuffer = state.challengeBuffer || 0;
                     return true;
                 } catch(e) {
                     return false;
@@ -1047,7 +1051,7 @@ function playDefendEpicSound() {
                 
                 // 重置挑战系统
                 moveCount = 0;
-                refreshInterval = 30;
+                refreshInterval = 25;
                 maxTileValue = 0;
                 mergedValues = [];
                 maxMergedPowerOf2 = 4;
@@ -1206,7 +1210,7 @@ function playDefendEpicSound() {
                 }
                 
                 // 更新刷新间隔
-                refreshInterval = Math.max(10, 30 - 2*Math.floor(score / 2000));
+                refreshInterval = Math.max(10, 25 - Math.floor(score / 1000));
                 updateChallengeDisplay();
             }
             
