@@ -314,7 +314,7 @@
               transition: all 0.3s ease;
             }
             /* 进度条容器强制隐藏溢出内容 */
-            .w-full.bg-board-2049\/30 {
+            #challenge-progress-container {
               overflow: hidden !important;
             }
         }
@@ -346,8 +346,8 @@
                 <span class="font-bold text-challenge">随机挑战生成进度</span>
                 <span id="challenge-count">0 / 30</span>
             </div>
-            <div class="w-full bg-board-2049/30 rounded-full h-2 relative">
-                <div id="challenge-progress" class="challenge-indicator h-2 rounded-full transition-all duration-300" style="width: 0%"></div>
+            <div id="challenge-progress-container" class="w-full bg-board-2049/30 rounded-full h-2 relative">
+                <div id="challenge-progress" class="challenge-indicator h-2 rounded-full transition-all duration-300" style="width: 0%; z-index: 0;"></div>
             </div>
         </div>
         
@@ -363,9 +363,9 @@
         <div class="bg-board-2049/20 rounded-md p-3 mb-4">
             <div class="text-xs font-bold mb-2 text-center" id="item-hint">道具栏 (点击选择，再点击方块使用)</div>
             <div class="grid grid-cols-6 gap-2">
-                <button id="item-swap" class="item-button bg-item-swap text-white rounded-md py-2 px-1 flex flex-col items-center" title="交换棋盘上任意两个方块的位置">
-                    <i class="fa fa-exchange text-lg"></i>
-                    <span class="text-xs mt-1">交换 <span id="count-swap">0</span></span>
+                <button id="item-shuffle" class="item-button bg-item-shuffle text-white rounded-md py-2 px-1 flex flex-col items-center" title="随机打乱所有方块">
+                    <i class="fa fa-random text-lg"></i>
+                    <span class="text-xs mt-1">洗牌 <span id="count-shuffle">0</span></span>
                 </button>
                 <button id="item-clear" class="item-button bg-item-clear text-white rounded-md py-2 px-1 flex flex-col items-center" title="消除所有相连的同色方块，生成平均值方块">
                     <i class="fa fa-eraser text-lg"></i>
@@ -375,9 +375,9 @@
                     <i class="fa fa-cut text-lg"></i>
                     <span class="text-xs mt-1">剪刀 <span id="count-scissors">0</span></span>
                 </button>
-                <button id="item-shuffle" class="item-button bg-item-shuffle text-white rounded-md py-2 px-1 flex flex-col items-center" title="随机打乱所有方块">
-                    <i class="fa fa-random text-lg"></i>
-                    <span class="text-xs mt-1">洗牌 <span id="count-shuffle">0</span></span>
+                <button id="item-swap" class="item-button bg-item-swap text-white rounded-md py-2 px-1 flex flex-col items-center" title="交换棋盘上任意两个方块的位置">
+                    <i class="fa fa-exchange text-lg"></i>
+                    <span class="text-xs mt-1">交换 <span id="count-swap">0</span></span>
                 </button>
                 <button id="item-plus" class="item-button bg-item-plus text-white rounded-md py-2 px-1 flex flex-col items-center" title="将一个方块加1">
                     <i class="fa fa-plus text-lg"></i>
@@ -499,6 +499,15 @@
                 plus: '加一：选择目标方块，使其数字+1',
                 default: '道具栏 (点击选择，再点击方块使用)'
             };
+            
+            // 统一清理所有方块的高亮和选中状态
+            function clearAllHighlights() {
+                const tiles = tileContainer.querySelectorAll('div');
+                tiles.forEach(tile => {
+                    tile.classList.remove('tile-highlight');
+                    tile.classList.remove('tile-selected');
+                });
+            }
             
             // ============================
             // 关卡特殊规则（第一关：第4列/第4行为X不可操作）
@@ -674,7 +683,9 @@
                 renderTiles(grid);
                 updateMaxTileValue();
                 saveGameState();
-                
+
+                clearAllHighlights();
+
                 showToast(`融合完成！方块已变为${avg}`);
                 playItemSound('swap');
                 
@@ -735,7 +746,8 @@
                 updateHelpUI();
                 pushHistory();
                 renderTiles(grid);
-
+                clearAllHighlights();
+                
                 // 如果清空了所有方块，自动生成1个新方块
                 if (totalBefore === destroyedCount) {
                     addRandomTile();
@@ -1057,6 +1069,7 @@ function playDefendEpicSound() {
                 maxMergedPowerOf2 = 4;
                 currentLevel = 1;
                 combo32Count = 0;
+                challengeBuffer = 0;
 
                 updateScore();
                 updateItemDisplay();
@@ -1217,12 +1230,12 @@ function playDefendEpicSound() {
 // 更新挑战显示（分层缓冲条，五色循环，永不溢出）
 function updateChallengeDisplay() {
     challengeCount.textContent = `${moveCount} / ${refreshInterval}`;
-    // 1. 更新紫色基础进度条
-    challengeProgress.style.width = `${(moveCount / refreshInterval) * 100}%`;
+    // 1. 更新紫色基础进度条（限制最大100%）
+    challengeProgress.style.width = `${Math.min((moveCount / refreshInterval) * 100, 100)}%`;
 
     // 2. 分层缓冲条配置：黄、橙、红、蓝、绿 循环
     const bufferColors = ['bg-yellow-400', 'bg-orange-500', 'bg-red-500', 'bg-blue-500', 'bg-green-500'];
-    const container = document.querySelector('.bg-board-2049\\/30');
+    const container = document.getElementById('challenge-progress-container');
     // 清空旧的缓冲层
     const oldLayers = container.querySelectorAll('.buffer-layer');
     oldLayers.forEach(layer => layer.remove());
@@ -1266,7 +1279,7 @@ function showDefendText() {
     // 2. 飘字放大弹出
     const text = document.createElement('div');
     text.className = 'defend-text';
-    text.textContent = '击退！';
+    text.textContent = 'COMBO！';
     document.body.appendChild(text);
     setTimeout(() => text.remove(), 1400);
 
@@ -1278,7 +1291,7 @@ function showDefendText() {
     });
 
     // 4. 进度条整体呼吸发光
-    const progressWrap = document.querySelector('.bg-board-2049\\/30');
+    const progressWrap = document.getElementById('challenge-progress-container');
     progressWrap.classList.add('defend-glow-active');
     setTimeout(()=>progressWrap.classList.remove('defend-glow-active'), 1800);
 }
@@ -1341,6 +1354,17 @@ function showDefendText() {
                                 moveCount = 0;
                                 maxMergedPowerOf2 = 4;
                                 mergedValues = [];
+                                // 重置帮助系统
+                                helpCounts = { merge: 1, destroy: 1, rearrange: 1 };
+                                helpActive = false;
+                                helpMode = null;
+                                helpSelectedTiles = [];
+                                // 重置历史和撤回里程碑
+                                history = [];
+                                undoMilestoneCount = 0;
+                                // 重置连击和缓冲
+                                combo32Count = 0;
+                                challengeBuffer = 0;
                                 // 清空方块显示
                                 clearTiles();
                                 // 生成两个新方块
@@ -1351,6 +1375,7 @@ function showDefendText() {
                                 updateItemDisplay();
                                 updateChallengeDisplay();
                                 updateLevelDisplay();
+                                updateHelpUI();
                                 // 保存状态
                                 saveGameState();
                                 // 播放音效并显示提示
@@ -1381,7 +1406,9 @@ function showDefendText() {
                     maxTileValue: maxTileValue,
                     items: JSON.parse(JSON.stringify(items)),
                     currentLevel: currentLevel,
-                    undoMilestoneCount: undoMilestoneCount
+                    undoMilestoneCount: undoMilestoneCount,
+                    challengeBuffer: challengeBuffer,
+                    combo32Count: combo32Count
                 });
                 // 只保留最近20步
                 if (history.length > 20) {
@@ -1413,6 +1440,8 @@ function showDefendText() {
                 restoredItems.undo = items.undo;
                 items = restoredItems;
                 undoMilestoneCount = prev.undoMilestoneCount;
+                challengeBuffer = prev.challengeBuffer || 0;
+                combo32Count = prev.combo32Count || 0;
 
                 gameOver = false;
                 gameWon = false;
@@ -1426,7 +1455,6 @@ function showDefendText() {
 
                 saveGameState();
                 showToast('✅ 已撤回上一步！');
-                combo32Count = 0;
             }
             
             // 检查玩家是否有可用道具
@@ -1543,17 +1571,45 @@ if (challengeBuffer > 0) {
                 }
             }
             
-            // 给予随机道具（不含undo）
+            // 给予随机道具（不含undo）- 连击动态调整概率
             function giveRandomItems(count) {
                 const itemTypes = ['swap', 'clear', 'scissors', 'shuffle', 'plus'];
-                
+                // 基础权重：shuffle(20) > clear(16) > scissors(12) > swap(8) > plus(4)
+                const baseWeights = {
+                    shuffle: 20,
+                    clear: 16,
+                    scissors: 12,
+                    swap: 8,
+                    plus: 4
+                };
+    
+                // 连击动态加成：shuffle不变，其余按规则递增
+                const dynamicWeights = [
+                    baseWeights.swap + 6 * combo32Count,    // swap: 8 + 6*连击数
+                    baseWeights.clear + 2 * combo32Count,   // clear: 16 + 2*连击数
+                    baseWeights.scissors + 4 * combo32Count,// scissors: 12 + 4*连击数
+                    baseWeights.shuffle,                    // shuffle: 固定20不变
+                    baseWeights.plus + 8 * combo32Count     // plus: 4 + 8*连击数
+                ];
+            
                 for (let i = 0; i < count; i++) {
-                    const randomType = itemTypes[Math.floor(Math.random() * itemTypes.length)];
-                    items[randomType]++;
+                    const totalWeight = dynamicWeights.reduce((a, b) => a + b, 0);
+                    let random = Math.random() * totalWeight;
+                    let selectedIndex = 0;
+                    
+                    for (let j = 0; j < dynamicWeights.length; j++) {
+                        random -= dynamicWeights[j];
+                        if (random <= 0) {
+                            selectedIndex = j;
+                            break;
+                        }
+                    }
+            
+                    items[itemTypes[selectedIndex]]++;
                 }
-                
-                updateItemDisplay();
-            }
+    
+    updateItemDisplay();
+}
 
             
             // 添加随机方块（带动画，跳过X位置）
@@ -1629,43 +1685,45 @@ if (challengeBuffer > 0) {
             }
             
             // 重新渲染所有方块（带动画效果）
-            function renderTilesWithAnimation(oldGrid) {
-                const tileSize = 'calc((100% - 36px) / 4)';
-                const gap = '12px';
-                
-                // 为所有现有方块设置到最终位置（触发CSS transition）
-                const tiles = tileContainer.querySelectorAll('div');
-                
-                // 记录新grid中每个位置的方块应该来自哪
-                // 我们先清除所有方块，然后用动画重新创建
-                // 为了实现动画，我们需要记录旧位置
-                
-                // 简单方案：直接重新渲染，但新方块会有appear动画，合并方块会有merge动画
-                clearTiles();
-                
-                // 重新创建所有方块
-                for (let i = 0; i < 4; i++) {
-                    for (let j = 0; j < 4; j++) {
-                        if (grid[i][j] !== 0) {
-                            // 判断是否是新方块（在oldGrid中这个位置是0）
-                            const isNew = !oldGrid || oldGrid[i][j] === 0;
-                            // 判断是否是合并的方块
-                            const isMerged = oldGrid && oldGrid[i][j] !== 0 && oldGrid[i][j] !== grid[i][j];
-                            
-                            addTile(i, j, grid[i][j], isNew);
-                            
-                            // 如果是合并的方块，添加合并动画
-                            if (isMerged) {
-                                const tiles = tileContainer.querySelectorAll('div');
-                                const lastTile = tiles[tiles.length - 1];
-                                setTimeout(() => {
-                                    lastTile.classList.add('tile-merge');
-                                }, 50);
-                            }
-                        }
+function renderTilesWithAnimation(oldGrid) {
+    // 记录旧位置的方块
+    const oldTiles = new Map();
+    tileContainer.querySelectorAll('div').forEach(tile => {
+        const row = parseInt(tile.dataset.row);
+        const col = parseInt(tile.dataset.col);
+        oldTiles.set(`${row}-${col}`, tile);
+    });
+
+    // 移动和更新现有方块
+    for (let i = 0; i < 4; i++) {
+        for (let j = 0; j < 4; j++) {
+            const key = `${i}-${j}`;
+            if (grid[i][j] !== 0) {
+                if (oldTiles.has(key)) {
+                    // 方块位置不变，更新数值和样式
+                    const tile = oldTiles.get(key);
+                    if (oldGrid[i][j] !== grid[i][j]) {
+                        // 合并后的方块
+                        tile.textContent = grid[i][j];
+                        tile.className = getTileColorClass(grid[i][j]);
+                        tile.classList.add('tile-merge');
+                        setTimeout(() => tile.classList.remove('tile-merge'), 200);
                     }
+                    oldTiles.delete(key);
+                } else {
+                    // 新方块或移动过来的方块
+                    addTile(i, j, grid[i][j], !oldGrid || oldGrid[i][j] === 0);
                 }
             }
+        }
+    }
+
+    // 删除消失的方块
+    oldTiles.forEach(tile => {
+        tile.classList.add('tile-destroying');
+        setTimeout(() => tile.remove(), 90);
+    });
+}
             
             // 根据位置查找tile元素
             function findTileElementAtPosition(row, col) {
@@ -2074,7 +2132,8 @@ if (challengeBuffer > 0) {
                     activeItem = null;
                     selectedTile = null;
                     document.getElementById('item-hint').textContent = itemHints.default;
-                    
+                    clearAllHighlights();
+
                     combo32Count = 0;
                     
                     updateItemDisplay();
