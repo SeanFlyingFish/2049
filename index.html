@@ -317,6 +317,50 @@
             #challenge-progress-container {
               overflow: hidden !important;
             }
+
+            /* 冰冻方块样式 */
+            .tile-frozen {
+                position: relative;
+                overflow: hidden;
+                cursor: not-allowed !important;
+            }
+
+            .tile-frozen::after {
+                content: '';
+                position: absolute;
+                top: 0;
+                left: 0;
+                width: 100%;
+                height: 100%;
+                background: linear-gradient(135deg, rgba(135, 206, 250, 0.65), rgba(173, 216, 230, 0.45));
+                border-radius: 0.25rem;
+                pointer-events: none;
+                z-index: 1;
+                box-shadow: inset 0 0 12px rgba(255, 255, 255, 0.6);
+            }
+
+            .tile-frozen::before {
+                content: '❄️';
+                position: absolute;
+                top: 2px;
+                right: 2px;
+                font-size: 12px;
+                z-index: 2;
+                pointer-events: none;
+            }
+
+            /* 破冰动画 */
+            @keyframes ice-break {
+                0% { transform: scale(1); opacity: 1; }
+                25% { transform: scale(1.15); opacity: 0.9; }
+                50% { transform: scale(0.95); opacity: 0.7; }
+                75% { transform: scale(1.05); opacity: 0.85; }
+                100% { transform: scale(1); opacity: 1; }
+            }
+
+            .tile-ice-breaking {
+                animation: ice-break 0.4s ease-in-out;
+            }
         }
     </style>
 </head>
@@ -432,6 +476,7 @@
             <p class="mt-1 text-challenge font-bold">任意奇数均可合并，仅相同偶数可合并！</p>
             <p class="mt-1 text-green-600 font-bold">每次合成32及以上数字可获得1个道具！</p>
             <p class="mt-1 text-blue-600 font-bold">每移动一定次数会生成1个随机挑战数字！</p>
+            <p class="mt-1 text-cyan-600 font-bold">❄️ 在冰冻方块周围合成相同数字即可破冰！</p>
             <p class="mt-1">只要有道具，棋盘满了也不会输！</p>
         </div>
     </div>
@@ -468,6 +513,7 @@
             };
             
             let grid = [];
+            let frozenGrid = []; // 冰冻方块状态数组（与grid一一对应）
             let score = 0;
             let bestScore = parseInt(localStorage.getItem('2049-best-score') || '0');
             let gameOver = false;
@@ -517,12 +563,12 @@
                 return false;
             }
 
-            // 第一关预设布局（4×4）
+            // 第一关预设布局（4×4）- 左下角添加冰冻32
             const level1Preset = [
                 [0, 0, 0, 0],
                 [0, 0, 0, 0],
                 [7, 0, 9, 0],
-                [0, 8, 8, 0]
+                [32, 8, 8, 0]
             ];
 
             // ============================
@@ -614,7 +660,10 @@
                 if (mode !== 'rearrange') {
                     const tiles = tileContainer.querySelectorAll('div');
                     tiles.forEach(tile => {
-                        tile.classList.add('tile-highlight');
+                        // 只给非冰冻方块加高亮
+                        if (tile.dataset.frozen !== 'true') {
+                            tile.classList.add('tile-highlight');
+                        }
                     });
                 }
 
@@ -640,17 +689,23 @@
             
             // 执行融合效果
             function executeMerge(row, col) {
+                // 无法选中冰冻方块
+                if (frozenGrid[row][col]) {
+                    showToast('无法选中冰冻方块！');
+                    return;
+                }
+                
                 const tileValue = grid[row][col];
                 if (tileValue === 0) {
                     showToast('请选择一个有数字的方块！');
                     return;
                 }
                 
-                // 收集九宫格内的所有数字
+                // 只收集非冰冻方块的数值
                 const values = [];
                 for (let i = Math.max(0, row - 1); i <= Math.min(3, row + 1); i++) {
                     for (let j = Math.max(0, col - 1); j <= Math.min(3, col + 1); j++) {
-                        if (grid[i][j] > 0) {
+                        if (grid[i][j] > 0 && !frozenGrid[i][j]) {
                             values.push(grid[i][j]);
                         }
                     }
@@ -661,17 +716,19 @@
                 // 计算平均数
                 const avg = Math.floor(values.reduce((a, b) => a + b, 0) / values.length);
                 
-                // 将点击位置设为平均数，周围8格清空（X位置保持X）
+                // 只清空非冰冻非X位置，冰冻方块保持不变
                 for (let i = Math.max(0, row - 1); i <= Math.min(3, row + 1); i++) {
                     for (let j = Math.max(0, col - 1); j <= Math.min(3, col + 1); j++) {
                         if (i === row && j === col) {
-                            // 点击位置：设为平均数
+                            // 点击位置：设为平均数，变为普通方块
                             grid[i][j] = avg;
-                        } else if (!isBlocked(i, j)) {
-                            // 非X位置：清空
+                            frozenGrid[i][j] = false;
+                        } else if (!isBlocked(i, j) && !frozenGrid[i][j]) {
+                            // 非X非冰冻位置：清空
                             grid[i][j] = 0;
+                            frozenGrid[i][j] = false;
                         }
-                        // X位置：保持 grid[i][j] = -1 不变
+                        // X位置和冰冻位置保持不变
                     }
                 }
                 
@@ -695,6 +752,12 @@
             
             // 执行爆炸效果
             function executeDestroy(row, col) {
+                // 无法选中冰冻方块
+                if (frozenGrid[row][col]) {
+                    showToast('无法选中冰冻方块！');
+                    return;
+                }
+                
                 // 防抖：如果帮助模式已结束（已被处理过），忽略重复调用
                 if (!helpActive) return;
 
@@ -737,6 +800,7 @@
                 const totalBefore = countNonZeroTiles();
                 helpSelectedTiles.forEach(pos => {
                     grid[pos.row][pos.col] = 0;
+                    frozenGrid[pos.row][pos.col] = false;
                 });
 
                 // 更新显示
@@ -763,11 +827,11 @@
             
             // 执行整队效果
             function executeRearrange() {
-                // 收集所有非零数字
+                // 只收集非冰冻方块的数值
                 const values = [];
                 for (let i = 0; i < 4; i++) {
                     for (let j = 0; j < 4; j++) {
-                        if (grid[i][j] > 0) {
+                        if (grid[i][j] > 0 && !frozenGrid[i][j]) {
                             values.push(grid[i][j]);
                         }
                     }
@@ -776,28 +840,37 @@
                 // 从小到大排序
                 values.sort((a, b) => a - b);
                 
-                // S形排列：第0行左→右，第1行右→左，第2行左→右，第3行右→左
+                // S形排列，冰冻方块位置保持不变
                 const newGrid = Array(4).fill().map(() => Array(4).fill(0));
+                // 先复制冰冻方块的数值
+                for (let i = 0; i < 4; i++) {
+                    for (let j = 0; j < 4; j++) {
+                        if (frozenGrid[i][j]) {
+                            newGrid[i][j] = grid[i][j];
+                        }
+                    }
+                }
+                
                 let index = 0;
                 for (let i = 0; i < 4; i++) {
                     if (i % 2 === 0) {
                         // 偶数行：左→右
                         for (let j = 0; j < 4; j++) {
-                            if (index < values.length) {
+                            if (!frozenGrid[i][j] && index < values.length) {
                                 newGrid[i][j] = values[index++];
                             }
                         }
                     } else {
                         // 奇数行：右→左
                         for (let j = 3; j >= 0; j--) {
-                            if (index < values.length) {
+                            if (!frozenGrid[i][j] && index < values.length) {
                                 newGrid[i][j] = values[index++];
                             }
                         }
                     }
                 }
                 
-                // 更新grid
+                // 更新grid，冰冻状态保持不变
                 for (let i = 0; i < 4; i++) {
                     for (let j = 0; j < 4; j++) {
                         grid[i][j] = newGrid[i][j];
@@ -813,7 +886,7 @@
                 updateMaxTileValue();
                 saveGameState();
                 
-                showToast('整队完成！方块已按S形排列');
+                showToast('整队完成！非冰冻方块已按S形排列');
                 playItemSound('shuffle');
                 
                 // 检查胜利
@@ -864,8 +937,10 @@
            // 连击专用：连续合成≥32计数
            let combo32Count = 0;  
            
-           // 本次移动中合成的次数和数值
-           let mergedValues = [];
+            // 本次移动中合成的次数和数值
+            let mergedValues = [];
+            // 本次移动中所有合成发生的位置（合成后新方块的位置）
+            let mergedPositions = [];
             
             // 挑战刷新随机数范围上限（仅2个相同2的n次幂合成时更新）
             let maxMergedPowerOf2 = 4;
@@ -958,18 +1033,28 @@
                 setTimeout(()=>playTone(392, 0.22, 'sine', 0.6), 200);
             }
 
-// 击退炸裂专属音效
-function playDefendEpicSound() {
-    if (!audioCtx) return;
-    // 改节奏：长停顿 + 紧凑后两音，大气 噔——噔噔！
-    playTone(520, 0.18, 'sine', 0.55);
-    setTimeout(function() { 
-        playTone(660, 0.15, 'sine', 0.55); 
-    }, 180);
-    setTimeout(function() { 
-        playTone(880, 0.3, 'triangle', 0.7); 
-    }, 260);
-}
+            // 击退炸裂专属音效
+            function playDefendEpicSound() {
+                if (!audioCtx) return;
+                // 改节奏：长停顿 + 紧凑后两音，大气 噔——噔噔！
+                playTone(520, 0.18, 'sine', 0.55);
+                setTimeout(function() { 
+                    playTone(660, 0.15, 'sine', 0.55); 
+                }, 180);
+                setTimeout(function() { 
+                    playTone(880, 0.3, 'triangle', 0.7); 
+                }, 260);
+            }
+
+            // 破冰专属音效
+            function playIceBreakSound() {
+                if (!audioCtx) return;
+                // 清脆的玻璃破碎音效：高频 + 短促衰减
+                playTone(1200, 0.1, 'sine', 0.4);
+                setTimeout(() => playTone(1500, 0.08, 'sine', 0.3), 50);
+                setTimeout(() => playTone(1800, 0.06, 'sine', 0.25), 100);
+                setTimeout(() => playTone(2000, 0.05, 'sine', 0.2), 150);
+            }
 
             // ============================
 
@@ -992,6 +1077,7 @@ function playDefendEpicSound() {
             function saveGameState() {
                 const state = {
                     grid,
+                    frozenGrid, // 保存冰冻方块状态
                     score,
                     items,
                     moveCount,
@@ -1017,6 +1103,8 @@ function playDefendEpicSound() {
                     // 如果存档里游戏已结束，就不恢复
                     if (state.gameOver || state.gameWon) return false;
                     grid = state.grid;
+                    // 兼容旧存档，没有frozenGrid则初始化为全false
+                    frozenGrid = state.frozenGrid || Array(4).fill().map(() => Array(4).fill(false));
                     score = state.score;
                     items = state.items;
                     moveCount = state.moveCount;
@@ -1043,6 +1131,7 @@ function playDefendEpicSound() {
             // 初始化游戏
             function initGame() {
                 grid = Array(4).fill().map(() => Array(4).fill(0));
+                frozenGrid = Array(4).fill().map(() => Array(4).fill(false));
                 score = 0;
                 gameOver = false;
                 gameWon = false;
@@ -1085,6 +1174,8 @@ function playDefendEpicSound() {
                             grid[i][j] = level1Preset[i][j];
                         }
                     }
+                    // 设置左下角为冰冻方块
+                    frozenGrid[3][0] = true;
                 } else {
                     // 生成两个初始方块
                     addRandomTile();
@@ -1148,7 +1239,7 @@ function playDefendEpicSound() {
             }
             
             // 添加一个方块到DOM
-            function addTile(row, col, value, isNew = false, isHighlighted = false, isChallenge = false, isSelected = false) {
+            function addTile(row, col, value, isNew = false, isHighlighted = false, isChallenge = false, isSelected = false, isFrozen = false, isIceBreaking = false) {
                 const tile = document.createElement('div');
                 
                 tile.style.position = 'absolute';
@@ -1163,12 +1254,13 @@ function playDefendEpicSound() {
                 tile.style.fontWeight = 'bold';
                 tile.style.fontSize = value >= 1000 ? '1.5rem' : value >= 100 ? '2rem' : '2.5rem';
                 tile.style.zIndex = '10';
-                tile.style.cursor = activeItem ? 'pointer' : 'default';
+                tile.style.cursor = isFrozen ? 'not-allowed' : (activeItem ? 'pointer' : 'default');
                 tile.style.transition = 'left 0.12s ease-in-out, top 0.12s ease-in-out';
                 
                 tile.textContent = value;
                 tile.dataset.row = row;
                 tile.dataset.col = col;
+                tile.dataset.frozen = isFrozen;
                 
                 // 分配唯一ID
                 const tileId = nextTileId++;
@@ -1178,11 +1270,16 @@ function playDefendEpicSound() {
                 tile.classList.add(getTileColorClass(value));
                 
                 if (isNew) tile.classList.add('tile-appear');
-                if (isHighlighted) tile.classList.add('tile-highlight');
+                if (isHighlighted && !isFrozen) tile.classList.add('tile-highlight');
                 if (isChallenge) tile.classList.add('tile-challenge');
-                if (isSelected) tile.classList.add('tile-selected');
+                if (isSelected && !isFrozen) tile.classList.add('tile-selected');
+                if (isFrozen) tile.classList.add('tile-frozen');
+                if (isIceBreaking) tile.classList.add('tile-ice-breaking');
                 
+                // 冰冻方块不响应任何点击事件
                 tile.addEventListener('click', () => {
+                    if (isFrozen) return;
+                    
                     // 帮助模式优先处理
                     if (helpActive && helpMode) {
                         if (helpMode === 'merge') {
@@ -1227,74 +1324,67 @@ function playDefendEpicSound() {
                 updateChallengeDisplay();
             }
             
-// 更新挑战显示（分层缓冲条，五色循环，永不溢出）
-function updateChallengeDisplay() {
-    challengeCount.textContent = `${moveCount} / ${refreshInterval}`;
-    // 1. 更新紫色基础进度条（限制最大100%）
-    challengeProgress.style.width = `${Math.min((moveCount / refreshInterval) * 100, 100)}%`;
+            // 更新挑战显示（分层缓冲条，五色循环，永不溢出）
+            function updateChallengeDisplay() {
+                challengeCount.textContent = `${moveCount} / ${refreshInterval}`;
+                // 1. 更新紫色基础进度条（限制最大100%）
+                challengeProgress.style.width = `${Math.min((moveCount / refreshInterval) * 100, 100)}%`;
 
-    // 2. 分层缓冲条配置：黄、橙、红、蓝、绿 循环
-    const bufferColors = ['bg-yellow-400', 'bg-orange-500', 'bg-red-500', 'bg-blue-500', 'bg-green-500'];
-    const container = document.getElementById('challenge-progress-container');
-    // 清空旧的缓冲层
-    const oldLayers = container.querySelectorAll('.buffer-layer');
-    oldLayers.forEach(layer => layer.remove());
+                // 2. 分层缓冲条配置：黄、橙、红、蓝、绿 循环
+                const bufferColors = ['bg-yellow-400', 'bg-orange-500', 'bg-red-500', 'bg-blue-500', 'bg-green-500'];
+                const container = document.getElementById('challenge-progress-container');
+                // 清空旧的缓冲层
+                const oldLayers = container.querySelectorAll('.buffer-layer');
+                oldLayers.forEach(layer => layer.remove());
 
-    // 3. 计算缓冲层数与剩余值
-    const totalBuffer = challengeBuffer;
-    const layerMax = refreshInterval; // 一层的最大值 = 挑战阈值
-    const fullLayers = Math.floor(totalBuffer / layerMax); // 满层数
-    const remainBuffer = totalBuffer % layerMax; // 最后一层剩余值
+                // 3. 计算缓冲层数与剩余值
+                const totalBuffer = challengeBuffer;
+                const layerMax = refreshInterval; // 一层的最大值 = 挑战阈值
+                const fullLayers = Math.floor(totalBuffer / layerMax); // 满层数
+                const remainBuffer = totalBuffer % layerMax; // 最后一层剩余值
 
-    // 4. 生成所有满层（每层100%宽度，循环染色）
-    for (let i = 0; i < fullLayers; i++) {
-        const color = bufferColors[i % bufferColors.length];
-        createBufferLayer(container, color, '100%', i + 1);
-    }
+                // 4. 生成所有满层（每层100%宽度，循环染色）
+                for (let i = 0; i < fullLayers; i++) {
+                    const color = bufferColors[i % bufferColors.length];
+                    createBufferLayer(container, color, '100%', i + 1);
+                }
 
-    // 5. 生成最后一层（剩余宽度，接续染色）
-    if (remainBuffer > 0) {
-        const color = bufferColors[fullLayers % bufferColors.length];
-        const width = `${(remainBuffer / layerMax) * 100}%`;
-        createBufferLayer(container, color, width, fullLayers + 1);
-    }
-}
+                // 5. 生成最后一层（剩余宽度，接续染色）
+                if (remainBuffer > 0) {
+                    const color = bufferColors[fullLayers % bufferColors.length];
+                    const width = `${(remainBuffer / layerMax) * 100}%`;
+                    createBufferLayer(container, color, width, fullLayers + 1);
+                }
+            }
 
-// 工具函数：创建单个缓冲层
-function createBufferLayer(container, colorClass, width, zIndex) {
-    const layer = document.createElement('div');
-    layer.className = `${colorClass} h-2 rounded-full transition-all duration-300 absolute buffer-layer`;
-    layer.style.width = width;
-    layer.style.left = '0';
-    layer.style.top = '0';
-    layer.style.zIndex = zIndex; // 层叠顺序
-    container.appendChild(layer);
-}
+            // 工具函数：创建单个缓冲层
+            function createBufferLayer(container, colorClass, width, zIndex) {
+                const layer = document.createElement('div');
+                layer.className = `${colorClass} h-2 rounded-full transition-all duration-300 absolute buffer-layer`;
+                layer.style.width = width;
+                layer.style.left = '0';
+                layer.style.top = '0';
+                layer.style.zIndex = zIndex; // 层叠顺序
+                container.appendChild(layer);
+            }
 
-// 显示击退飘字 + 全局呼吸灯发光 + 燃向音效
-function showDefendText() {
-    // 1. 播放激动人心击退音效
-    playDefendEpicSound();
+            // 显示击退飘字 + 全局呼吸灯发光 + 燃向音效
+            function showDefendText() {
+                // 1. 播放激动人心击退音效
+                playDefendEpicSound();
 
-    // 2. 飘字放大弹出
-    const text = document.createElement('div');
-    text.className = 'defend-text';
-    text.textContent = 'COMBO！';
-    document.body.appendChild(text);
-    setTimeout(() => text.remove(), 1400);
+                // 2. 飘字放大弹出
+                const text = document.createElement('div');
+                text.className = 'defend-text';
+                text.textContent = 'COMBO！';
+                document.body.appendChild(text);
+                setTimeout(() => text.remove(), 1400);
 
-    // 3. 所有方块呼吸发光
-    const allTiles = tileContainer.querySelectorAll('div');
-    allTiles.forEach(tile => {
-        tile.classList.add('defend-glow-active');
-        setTimeout(()=>tile.classList.remove('defend-glow-active'), 1800);
-    });
-
-    // 4. 进度条整体呼吸发光
-    const progressWrap = document.getElementById('challenge-progress-container');
-    progressWrap.classList.add('defend-glow-active');
-    setTimeout(()=>progressWrap.classList.remove('defend-glow-active'), 1800);
-}
+                // 4. 进度条整体呼吸发光
+                const progressWrap = document.getElementById('challenge-progress-container');
+                progressWrap.classList.add('defend-glow-active');
+                setTimeout(()=>progressWrap.classList.remove('defend-glow-active'), 1800);
+            }
             
             // 更新关卡显示
             function updateLevelDisplay() {
@@ -1316,7 +1406,7 @@ function showDefendText() {
                 
                 const tiles = tileContainer.querySelectorAll('div');
                 tiles.forEach(tile => {
-                    tile.style.cursor = activeItem ? 'pointer' : 'default';
+                    tile.style.cursor = tile.dataset.frozen === 'true' ? 'not-allowed' : (activeItem ? 'pointer' : 'default');
                 });
             }
             
@@ -1346,6 +1436,7 @@ function showDefendText() {
                                 score = 0;
                                 // 重置盘面
                                 grid = Array(4).fill().map(() => Array(4).fill(0));
+                                frozenGrid = Array(4).fill().map(() => Array(4).fill(false));
                                 // 重置道具
                                 items = { swap: 1, clear: 1, scissors: 1, shuffle: 1, plus: 1, undo: 3 };
                                 activeItem = null;
@@ -1401,6 +1492,7 @@ function showDefendText() {
             function pushHistory() {
                 history.push({
                     grid: JSON.parse(JSON.stringify(grid)),
+                    frozenGrid: JSON.parse(JSON.stringify(frozenGrid)),
                     score: score,
                     moveCount: moveCount,
                     maxTileValue: maxTileValue,
@@ -1431,6 +1523,7 @@ function showDefendText() {
                 // 恢复上一步状态（不弹出，保持可继续撤回）
                 const prev = history[history.length - 1];
                 grid = JSON.parse(JSON.stringify(prev.grid));
+                frozenGrid = JSON.parse(JSON.stringify(prev.frozenGrid));
                 score = prev.score;
                 moveCount = prev.moveCount;
                 maxTileValue = prev.maxTileValue;
@@ -1465,6 +1558,120 @@ function showDefendText() {
                 return false;
             }
             
+            // 检查两个数字是否可以合并
+            function canMerge(a, b, aFrozen = false, bFrozen = false) {
+                // 任意一个是冰冻方块，无法合并
+                if (aFrozen || bFrozen) return false;
+                if (a % 2 === 1 && b % 2 === 1) return true;
+                if (a % 2 === 0 && b % 2 === 0 && a === b) return true;
+                return false;
+            }
+            
+            // ============================
+            // 冰冻方块破冰机制（修正版：仅相邻合成可破冰）
+            // ============================
+            function checkAndBreakIce() {
+                let iceBroken = false;
+                const brokenPositions = [];
+                
+                // 遍历所有本次发生合成的位置
+                for (const mergePos of mergedPositions) {
+                    const mergeRow = mergePos.row;
+                    const mergeCol = mergePos.col;
+                    const mergeValue = grid[mergeRow][mergeCol];
+                    
+                    // 检查合成位置的上下左右四个方向是否有冰冻方块
+                    const directions = [
+                        [mergeRow-1, mergeCol], // 上
+                        [mergeRow+1, mergeCol], // 下
+                        [mergeRow, mergeCol-1], // 左
+                        [mergeRow, mergeCol+1]  // 右
+                    ];
+                    
+                    for (const [row, col] of directions) {
+                        // 检查位置是否有效，是冰冻方块，且数值与合成值相同
+                        if (row >= 0 && row < 4 && col >= 0 && col < 4 && 
+                            frozenGrid[row][col] && 
+                            grid[row][col] === mergeValue) {
+                            // 破冰成功
+                            frozenGrid[row][col] = false;
+                            brokenPositions.push({ row: row, col: col, value: grid[row][col] });
+                            iceBroken = true;
+                        }
+                    }
+                }
+                
+                // 如果有破冰发生
+                if (iceBroken) {
+                    // 播放破冰音效
+                    playIceBreakSound();
+                    
+                    // 显示破冰提示
+                    if (brokenPositions.length === 1) {
+                        showToast(`❄️ 破冰成功！冰冻 ${brokenPositions[0].value} 已解冻！`);
+                    } else {
+                        showToast(`❄️ 破冰成功！${brokenPositions.length} 个冰冻方块已解冻！`);
+                    }
+                    
+                    // 重新渲染方块，添加破冰动画
+                    renderTilesWithIceBreakAnimation(brokenPositions);
+                }
+                
+                // 清空本次合成位置记录
+                mergedPositions = [];
+                
+                return iceBroken;
+            }
+            
+            // 带动画的破冰渲染
+            function renderTilesWithIceBreakAnimation(brokenPositions) {
+                // 记录旧位置的方块
+                const oldTiles = new Map();
+                tileContainer.querySelectorAll('div').forEach(tile => {
+                    const row = parseInt(tile.dataset.row);
+                    const col = parseInt(tile.dataset.col);
+                    oldTiles.set(`${row}-${col}`, tile);
+                });
+
+                // 移动和更新现有方块
+                for (let i = 0; i < 4; i++) {
+                    for (let j = 0; j < 4; j++) {
+                        const key = `${i}-${j}`;
+                        if (grid[i][j] !== 0) {
+                            // 检查是否是刚破冰的方块
+                            const isBroken = brokenPositions.some(p => p.row === i && p.col === j);
+                            
+                            if (oldTiles.has(key)) {
+                                // 方块位置不变，更新样式
+                                const tile = oldTiles.get(key);
+                                if (isBroken) {
+                                    // 移除冰冻样式，添加破冰动画
+                                    tile.classList.remove('tile-frozen');
+                                    tile.classList.add('tile-ice-breaking');
+                                    tile.dataset.frozen = 'false';
+                                    tile.style.cursor = activeItem ? 'pointer' : 'default';
+                                    
+                                    // 动画结束后移除动画类
+                                    setTimeout(() => {
+                                        tile.classList.remove('tile-ice-breaking');
+                                    }, 400);
+                                }
+                                oldTiles.delete(key);
+                            } else {
+                                // 新方块
+                                addTile(i, j, grid[i][j], true, false, false, false, false, isBroken);
+                            }
+                        }
+                    }
+                }
+
+                // 删除消失的方块
+                oldTiles.forEach(tile => {
+                    tile.classList.add('tile-destroying');
+                    setTimeout(() => tile.remove(), 90);
+                });
+            }
+            
             // 移动方块
             function move(direction) {
                 if (gameOver || gameWon || activeItem || helpActive) return;
@@ -1488,50 +1695,53 @@ function showDefendText() {
                     for (var mi = 0; mi < mergedValues.length; mi++) {
                         playMergeSound(mergedValues[mi]);
                     }
+                    
+                    // 检查并执行破冰
+                    const iceBroken = checkAndBreakIce();
                                         
-// ========== 全新击退结算逻辑：优先抵扣moveCount，剩余进黄色缓冲 ==========
-const current32Merge = mergedValues.filter(v => v >= 32).length;
+                    // ========== 全新击退结算逻辑：优先抵扣moveCount，剩余进黄色缓冲 ==========
+                    const current32Merge = mergedValues.filter(v => v >= 32).length;
 
-if (current32Merge > 0) {
-    // 连击计数递增
-    combo32Count++;
-    // 连击倍率：2^(n-1)
-    const addDefend = Math.pow(2, combo32Count - 1);
+                    if (current32Merge > 0) {
+                        // 连击计数递增
+                        combo32Count++;
+                        // 连击倍率：2^(n-1)
+                        const addDefend = Math.pow(2, combo32Count - 1);
 
-    // 核心规则：优先抵扣紫色moveCount
-    let deduct = Math.min(addDefend, moveCount);
-    let remainDefend = addDefend - deduct;
+                        // 核心规则：优先抵扣紫色moveCount
+                        let deduct = Math.min(addDefend, moveCount);
+                        let remainDefend = addDefend - deduct;
 
-    // 抵扣进度
-    moveCount -= deduct;
-    // 剩余击退值存入黄色缓冲
-    challengeBuffer += remainDefend;
+                        // 抵扣进度
+                        moveCount -= deduct;
+                        // 剩余击退值存入黄色缓冲
+                        challengeBuffer += remainDefend;
 
-    // 仅第二次及以上连击才飘击退文字
-    if (combo32Count >= 2) {
-        showDefendText();
-    }
+                        // 仅第二次及以上连击才飘击退文字
+                        if (combo32Count >= 2) {
+                            showDefendText();
+                        }
 
-    // 友好提示
-    if(deduct > 0 && remainDefend > 0){
-        showToast(`🔥 连击${combo32Count}次！抵扣进度${deduct}，剩余${remainDefend}存入缓冲`);
-    }else if(deduct > 0){
-        showToast(`🔥 连击${combo32Count}次！直接抵扣进度${deduct}`);
-    }else{
-        showToast(`🔥 连击${combo32Count}次！全部${addDefend}存入击退缓冲`);
-    }
-} else {
-    // 无32+合成，连击断档重置
-    combo32Count = 0;
-}
+                        // 友好提示
+                        if(deduct > 0 && remainDefend > 0){
+                            showToast(`🔥 连击${combo32Count}次！抵扣进度${deduct}，剩余${remainDefend}存入缓冲`);
+                        }else if(deduct > 0){
+                            showToast(`🔥 连击${combo32Count}次！直接抵扣进度${deduct}`);
+                        }else{
+                            showToast(`🔥 连击${combo32Count}次！全部${addDefend}存入击退缓冲`);
+                        }
+                    } else {
+                        // 无32+合成，连击断档重置
+                        combo32Count = 0;
+                    }
 
-// 原有每次移动消耗逻辑保留不变
-if (challengeBuffer > 0) {
-    challengeBuffer--; 
-} else {
-    moveCount++; 
-}
-// ======================================================================
+                    // 原有每次移动消耗逻辑保留不变
+                    if (challengeBuffer > 0) {
+                        challengeBuffer--; 
+                    } else {
+                        moveCount++; 
+                    }
+                    // ======================================================================
                     
                     // 保存历史
                     pushHistory();
@@ -1569,6 +1779,268 @@ if (challengeBuffer > 0) {
                         saveGameState();
                     }, 200); // 等待滑动和合并动画完成
                 }
+            }
+            
+            // 向左移动（保持X位置不变）
+            function moveLeft() {
+                let moved = false;
+                
+                for (let row = 0; row < 4; row++) {
+                    // 收集非X位置的单元格（包含数值和冰冻状态）
+                    let cells = [];
+                    for (let j = 0; j < 4; j++) {
+                        if (!isBlocked(row, j) && grid[row][j] !== 0) {
+                            cells.push({
+                                value: grid[row][j],
+                                frozen: frozenGrid[row][j]
+                            });
+                        }
+                    }
+                    
+                    // 合并（冰冻方块不参与合并）
+                    for (let i = 0; i < cells.length - 1; i++) {
+                        if (canMerge(cells[i].value, cells[i+1].value, cells[i].frozen, cells[i+1].frozen)) {
+                            const val = cells[i].value;
+                            cells[i].value += cells[i + 1].value;
+                            score += cells[i].value;
+                            mergedValues.push(cells[i].value);
+                            // 记录合成位置：向左合并后，新方块在第i个非X位置
+                            let posIdx = 0;
+                            for (let j = 0; j < 4; j++) {
+                                if (!isBlocked(row, j)) {
+                                    if (posIdx === i) {
+                                        mergedPositions.push({row: row, col: j});
+                                        break;
+                                    }
+                                    posIdx++;
+                                }
+                            }
+                            if (isPowerOf2(val) && isPowerOf2(cells[i].value)) {
+                                maxMergedPowerOf2 = Math.max(maxMergedPowerOf2, cells[i].value);
+                            }
+                            cells.splice(i + 1, 1);
+                            moved = true;
+                        }
+                    }
+                    
+                    // 填回grid和frozenGrid（只填非X位置）
+                    let idx = 0;
+                    for (let j = 0; j < 4; j++) {
+                        if (!isBlocked(row, j)) {
+                            const oldVal = grid[row][j];
+                            const oldFrozen = frozenGrid[row][j];
+                            if (idx < cells.length) {
+                                grid[row][j] = cells[idx].value;
+                                frozenGrid[row][j] = cells[idx].frozen;
+                                idx++;
+                            } else {
+                                grid[row][j] = 0;
+                                frozenGrid[row][j] = false;
+                            }
+                            if (oldVal !== grid[row][j] || oldFrozen !== frozenGrid[row][j]) moved = true;
+                        }
+                    }
+                }
+                
+                updateScore();
+                return moved;
+            }
+            
+            // 向右移动（保持X位置不变）
+            function moveRight() {
+                let moved = false;
+                
+                for (let row = 0; row < 4; row++) {
+                    // 收集非X位置的单元格（包含数值和冰冻状态）
+                    let cells = [];
+                    for (let j = 0; j < 4; j++) {
+                        if (!isBlocked(row, j) && grid[row][j] !== 0) {
+                            cells.push({
+                                value: grid[row][j],
+                                frozen: frozenGrid[row][j]
+                            });
+                        }
+                    }
+                    
+                    // 合并（从右向左，冰冻方块不参与合并）
+                    for (let i = cells.length - 1; i > 0; i--) {
+                        if (canMerge(cells[i].value, cells[i-1].value, cells[i].frozen, cells[i-1].frozen)) {
+                            const val = cells[i].value;
+                            cells[i].value += cells[i - 1].value;
+                            score += cells[i].value;
+                            mergedValues.push(cells[i].value);
+                            // 记录合成位置：向右合并后，新方块在第i个非X位置（从右数）
+                            let posIdx = cells.length - 1;
+                            for (let j = 3; j >= 0; j--) {
+                                if (!isBlocked(row, j)) {
+                                    if (posIdx === i) {
+                                        mergedPositions.push({row: row, col: j});
+                                        break;
+                                    }
+                                    posIdx--;
+                                }
+                            }
+                            if (isPowerOf2(val) && isPowerOf2(cells[i].value)) {
+                                maxMergedPowerOf2 = Math.max(maxMergedPowerOf2, cells[i].value);
+                            }
+                            cells.splice(i - 1, 1);
+                            i--;
+                            moved = true;
+                        }
+                    }
+                    
+                    // 填回grid和frozenGrid（从右向左，只填非X位置）
+                    let idx = cells.length - 1;
+                    for (let j = 3; j >= 0; j--) {
+                        if (!isBlocked(row, j)) {
+                            const oldVal = grid[row][j];
+                            const oldFrozen = frozenGrid[row][j];
+                            if (idx >= 0) {
+                                grid[row][j] = cells[idx].value;
+                                frozenGrid[row][j] = cells[idx].frozen;
+                                idx--;
+                            } else {
+                                grid[row][j] = 0;
+                                frozenGrid[row][j] = false;
+                            }
+                            if (oldVal !== grid[row][j] || oldFrozen !== frozenGrid[row][j]) moved = true;
+                        }
+                    }
+                }
+                
+                updateScore();
+                return moved;
+            }
+            
+            // 向上移动（保持X位置不变）
+            function moveUp() {
+                let moved = false;
+                
+                for (let col = 0; col < 4; col++) {
+                    // 收集非X位置的单元格（包含数值和冰冻状态）
+                    let cells = [];
+                    for (let i = 0; i < 4; i++) {
+                        if (!isBlocked(i, col) && grid[i][col] !== 0) {
+                            cells.push({
+                                value: grid[i][col],
+                                frozen: frozenGrid[i][col]
+                            });
+                        }
+                    }
+                    
+                    // 合并（冰冻方块不参与合并）
+                    for (let i = 0; i < cells.length - 1; i++) {
+                        if (canMerge(cells[i].value, cells[i+1].value, cells[i].frozen, cells[i+1].frozen)) {
+                            const val = cells[i].value;
+                            cells[i].value += cells[i + 1].value;
+                            score += cells[i].value;
+                            mergedValues.push(cells[i].value);
+                            // 记录合成位置：向上合并后，新方块在第i个非X位置
+                            let posIdx = 0;
+                            for (let j = 0; j < 4; j++) {
+                                if (!isBlocked(j, col)) {
+                                    if (posIdx === i) {
+                                        mergedPositions.push({row: j, col: col});
+                                        break;
+                                    }
+                                    posIdx++;
+                                }
+                            }
+                            if (isPowerOf2(val) && isPowerOf2(cells[i].value)) {
+                                maxMergedPowerOf2 = Math.max(maxMergedPowerOf2, cells[i].value);
+                            }
+                            cells.splice(i + 1, 1);
+                            moved = true;
+                        }
+                    }
+                    
+                    // 填回grid和frozenGrid（只填非X位置）
+                    let idx = 0;
+                    for (let i = 0; i < 4; i++) {
+                        if (!isBlocked(i, col)) {
+                            const oldVal = grid[i][col];
+                            const oldFrozen = frozenGrid[i][col];
+                            if (idx < cells.length) {
+                                grid[i][col] = cells[idx].value;
+                                frozenGrid[i][col] = cells[idx].frozen;
+                                idx++;
+                            } else {
+                                grid[i][col] = 0;
+                                frozenGrid[i][col] = false;
+                            }
+                            if (oldVal !== grid[i][col] || oldFrozen !== frozenGrid[i][col]) moved = true;
+                        }
+                    }
+                }
+                
+                updateScore();
+                return moved;
+            }
+            
+            // 向下移动（保持X位置不变）
+            function moveDown() {
+                let moved = false;
+                
+                for (let col = 0; col < 4; col++) {
+                    // 收集非X位置的单元格（包含数值和冰冻状态）
+                    let cells = [];
+                    for (let i = 0; i < 4; i++) {
+                        if (!isBlocked(i, col) && grid[i][col] !== 0) {
+                            cells.push({
+                                value: grid[i][col],
+                                frozen: frozenGrid[i][col]
+                            });
+                        }
+                    }
+                    
+                    // 合并（从下向上，冰冻方块不参与合并）
+                    for (let i = cells.length - 1; i > 0; i--) {
+                        if (canMerge(cells[i].value, cells[i-1].value, cells[i].frozen, cells[i-1].frozen)) {
+                            const val = cells[i].value;
+                            cells[i].value += cells[i - 1].value;
+                            score += cells[i].value;
+                            mergedValues.push(cells[i].value);
+                            // 记录合成位置：向下合并后，新方块在第i个非X位置（从下数）
+                            let posIdx = cells.length - 1;
+                            for (let j = 3; j >= 0; j--) {
+                                if (!isBlocked(j, col)) {
+                                    if (posIdx === i) {
+                                        mergedPositions.push({row: j, col: col});
+                                        break;
+                                    }
+                                    posIdx--;
+                                }
+                            }
+                            if (isPowerOf2(val) && isPowerOf2(cells[i].value)) {
+                                maxMergedPowerOf2 = Math.max(maxMergedPowerOf2, cells[i].value);
+                            }
+                            cells.splice(i - 1, 1);
+                            i--;
+                            moved = true;
+                        }
+                    }
+                    
+                    // 填回grid和frozenGrid（从下向上，只填非X位置）
+                    let idx = cells.length - 1;
+                    for (let i = 3; i >= 0; i--) {
+                        if (!isBlocked(i, col)) {
+                            const oldVal = grid[i][col];
+                            const oldFrozen = frozenGrid[i][col];
+                            if (idx >= 0) {
+                                grid[i][col] = cells[idx].value;
+                                frozenGrid[i][col] = cells[idx].frozen;
+                                idx--;
+                            } else {
+                                grid[i][col] = 0;
+                                frozenGrid[i][col] = false;
+                            }
+                            if (oldVal !== grid[i][col] || oldFrozen !== frozenGrid[i][col]) moved = true;
+                        }
+                    }
+                }
+                
+                updateScore();
+                return moved;
             }
             
             // 给予随机道具（不含undo）- 连击动态调整概率
@@ -1649,13 +2121,63 @@ if (challengeBuffer > 0) {
                 }
                 
                 const randomCell = emptyCells[Math.floor(Math.random() * emptyCells.length)];
-                const value = Math.floor(Math.random() * (maxMergedPowerOf2 - 1)) + 1;
+                let value;
+                let isFrozen = false;
+                
+                // 按maxMergedPowerOf2阈值计算冰冻方块概率
+                let frozenProbability = 0;
+                if (maxMergedPowerOf2 >= 1024) {
+                    frozenProbability = 0.4; // 40%
+                } else if (maxMergedPowerOf2 >= 512) {
+                    frozenProbability = 0.3; // 30%
+                } else if (maxMergedPowerOf2 >= 256) {
+                    frozenProbability = 0.2; // 20%
+                } else if (maxMergedPowerOf2 >= 128) {
+                    frozenProbability = 0.1; // 10%
+                }
+
+                if (Math.random() < frozenProbability) {
+                    // 按加权概率生成冰冻方块数值：8(50%)、16(30%)、32(12%)、64(8%)
+                    const valueRand = Math.random();
+                    if (valueRand < 0.50) {
+                        value = 8;
+                    } else if (valueRand < 0.80) { // 0.5 + 0.3
+                        value = 16;
+                    } else if (valueRand < 0.92) { // 0.8 + 0.12
+                        value = 32;
+                    } else { // 剩余 0.08
+                        value = 64;
+                    }
+                    
+                    isFrozen = true;
+                    showToast(`❄️ 冰冻挑战：出现了冰冻 ${value}！`);
+                    
+                    // 重置历史记录，无法回到冰冻方块出现之前的状态
+                    history = [{
+                        grid: JSON.parse(JSON.stringify(grid)),
+                        frozenGrid: JSON.parse(JSON.stringify(frozenGrid)),
+                        score: score,
+                        moveCount: moveCount,
+                        maxTileValue: maxTileValue,
+                        items: JSON.parse(JSON.stringify(items)),
+                        currentLevel: currentLevel,
+                        undoMilestoneCount: undoMilestoneCount,
+                        challengeBuffer: challengeBuffer,
+                        combo32Count: combo32Count
+                    }];
+                }else {
+                    // 普通挑战方块
+                    value = Math.floor(Math.random() * (maxMergedPowerOf2 - 1)) + 1;
+                }
                 
                 grid[randomCell.row][randomCell.col] = value;
-                addTile(randomCell.row, randomCell.col, value, false, false, true);
+                frozenGrid[randomCell.row][randomCell.col] = isFrozen;
+                addTile(randomCell.row, randomCell.col, value, false, false, true, false, isFrozen);
                 
                 playChallengeSound();
-                showToast(`⚡ 挑战刷新：出现了 ${value}！`);
+                if (!isFrozen) {
+                    showToast(`⚡ 挑战刷新：出现了 ${value}！`);
+                }
                 
                 updateMaxTileValue();
                 pushHistory();
@@ -1685,45 +2207,46 @@ if (challengeBuffer > 0) {
             }
             
             // 重新渲染所有方块（带动画效果）
-function renderTilesWithAnimation(oldGrid) {
-    // 记录旧位置的方块
-    const oldTiles = new Map();
-    tileContainer.querySelectorAll('div').forEach(tile => {
-        const row = parseInt(tile.dataset.row);
-        const col = parseInt(tile.dataset.col);
-        oldTiles.set(`${row}-${col}`, tile);
-    });
+            function renderTilesWithAnimation(oldGrid) {
+                // 记录旧位置的方块
+                const oldTiles = new Map();
+                tileContainer.querySelectorAll('div').forEach(tile => {
+                    const row = parseInt(tile.dataset.row);
+                    const col = parseInt(tile.dataset.col);
+                    oldTiles.set(`${row}-${col}`, tile);
+                });
 
-    // 移动和更新现有方块
-    for (let i = 0; i < 4; i++) {
-        for (let j = 0; j < 4; j++) {
-            const key = `${i}-${j}`;
-            if (grid[i][j] !== 0) {
-                if (oldTiles.has(key)) {
-                    // 方块位置不变，更新数值和样式
-                    const tile = oldTiles.get(key);
-                    if (oldGrid[i][j] !== grid[i][j]) {
-                        // 合并后的方块
-                        tile.textContent = grid[i][j];
-                        tile.className = getTileColorClass(grid[i][j]);
-                        tile.classList.add('tile-merge');
-                        setTimeout(() => tile.classList.remove('tile-merge'), 200);
+                // 移动和更新现有方块
+                for (let i = 0; i < 4; i++) {
+                    for (let j = 0; j < 4; j++) {
+                        const key = `${i}-${j}`;
+                        if (grid[i][j] !== 0) {
+                            if (oldTiles.has(key)) {
+                                // 方块位置不变，更新数值和样式
+                                const tile = oldTiles.get(key);
+                                if (oldGrid[i][j] !== grid[i][j]) {
+                                    // 合并后的方块
+                                    tile.textContent = grid[i][j];
+                                    tile.className = getTileColorClass(grid[i][j]);
+                                    if (frozenGrid[i][j]) tile.classList.add('tile-frozen');
+                                    tile.classList.add('tile-merge');
+                                    setTimeout(() => tile.classList.remove('tile-merge'), 200);
+                                }
+                                oldTiles.delete(key);
+                            } else {
+                                // 新方块或移动过来的方块
+                                addTile(i, j, grid[i][j], !oldGrid || oldGrid[i][j] === 0, false, false, false, frozenGrid[i][j]);
+                            }
+                        }
                     }
-                    oldTiles.delete(key);
-                } else {
-                    // 新方块或移动过来的方块
-                    addTile(i, j, grid[i][j], !oldGrid || oldGrid[i][j] === 0);
                 }
-            }
-        }
-    }
 
-    // 删除消失的方块
-    oldTiles.forEach(tile => {
-        tile.classList.add('tile-destroying');
-        setTimeout(() => tile.remove(), 90);
-    });
-}
+                // 删除消失的方块
+                oldTiles.forEach(tile => {
+                    tile.classList.add('tile-destroying');
+                    setTimeout(() => tile.remove(), 90);
+                });
+            }
             
             // 根据位置查找tile元素
             function findTileElementAtPosition(row, col) {
@@ -1736,13 +2259,17 @@ function renderTilesWithAnimation(oldGrid) {
                 return null;
             }
             
-            // 移除tile元素
-            function removeTileElement(row, col) {
-                const tile = findTileElementAtPosition(row, col);
-                if (tile) {
-                    tile.remove();
-                }
-            }
+           // 在removeTileElement函数中添加事件监听器移除
+           function removeTileElement(row, col) {
+               const tile = findTileElementAtPosition(row, col);
+               if (tile) {
+                   // 克隆元素并替换，自动移除所有事件监听器
+                   const clone = tile.cloneNode(true);
+                   tile.parentNode.replaceChild(clone, tile);
+                   clone.classList.add('tile-destroying');
+                   setTimeout(() => clone.remove(), 90);
+               }
+           }
             
             // 重新渲染所有方块（无动画，用于重置等情况）
             function renderTiles(oldGrid) {
@@ -1751,7 +2278,7 @@ function renderTilesWithAnimation(oldGrid) {
                     for (let j = 0; j < 4; j++) {
                         if (grid[i][j] !== 0) {
                             const isMerged = oldGrid && oldGrid[i] && oldGrid[i][j] !== 0 && oldGrid[i][j] !== grid[i][j];
-                            addTile(i, j, grid[i][j], !isMerged);
+                            addTile(i, j, grid[i][j], !isMerged, false, false, false, frozenGrid[i][j]);
                             
                             if (isMerged) {
                                 const tiles = tileContainer.querySelectorAll('div');
@@ -1763,187 +2290,6 @@ function renderTilesWithAnimation(oldGrid) {
                 }
             }
             
-            // 检查两个数字是否可以合并
-            function canMerge(a, b) {
-                if (a % 2 === 1 && b % 2 === 1) return true;
-                if (a % 2 === 0 && b % 2 === 0 && a === b) return true;
-                return false;
-            }
-            
-            // 向左移动（保持X位置不变）
-            function moveLeft() {
-                let moved = false;
-                
-                for (let row = 0; row < 4; row++) {
-                    // 收集非X位置的值
-                    let values = [];
-                    for (let j = 0; j < 4; j++) {
-                        if (!isBlocked(row, j) && grid[row][j] !== 0) {
-                            values.push(grid[row][j]);
-                        }
-                    }
-                    
-                    // 合并
-                    for (let i = 0; i < values.length - 1; i++) {
-                        if (canMerge(values[i], values[i + 1])) {
-                            const val = values[i];
-                            values[i] += values[i + 1];
-                            score += values[i];
-                            mergedValues.push(values[i]);
-                            if (isPowerOf2(val) && isPowerOf2(values[i])) {
-                                maxMergedPowerOf2 = Math.max(maxMergedPowerOf2, values[i]);
-                            }
-                            values.splice(i + 1, 1);
-                            moved = true;
-                        }
-                    }
-                    
-                    // 填回grid（只填非X位置）
-                    let idx = 0;
-                    for (let j = 0; j < 4; j++) {
-                        if (!isBlocked(row, j)) {
-                            const oldVal = grid[row][j];
-                            grid[row][j] = idx < values.length ? values[idx++] : 0;
-                            if (oldVal !== grid[row][j]) moved = true;
-                        }
-                    }
-                }
-                
-                updateScore();
-                return moved;
-            }
-            
-            // 向右移动（保持X位置不变）
-            function moveRight() {
-                let moved = false;
-                
-                for (let row = 0; row < 4; row++) {
-                    // 收集非X位置的值
-                    let values = [];
-                    for (let j = 0; j < 4; j++) {
-                        if (!isBlocked(row, j) && grid[row][j] !== 0) {
-                            values.push(grid[row][j]);
-                        }
-                    }
-                    
-                    // 合并（从右向左）
-                    for (let i = values.length - 1; i > 0; i--) {
-                        if (canMerge(values[i], values[i - 1])) {
-                            const val = values[i];
-                            values[i] += values[i - 1];
-                            score += values[i];
-                            mergedValues.push(values[i]);
-                            if (isPowerOf2(val) && isPowerOf2(values[i])) {
-                                maxMergedPowerOf2 = Math.max(maxMergedPowerOf2, values[i]);
-                            }
-                            values.splice(i - 1, 1);
-                            i--;
-                            moved = true;
-                        }
-                    }
-                    
-                    // 填回grid（只填非X位置，从右向左）
-                    let idx = values.length - 1;
-                    for (let j = 3; j >= 0; j--) {
-                        if (!isBlocked(row, j)) {
-                            const oldVal = grid[row][j];
-                            grid[row][j] = idx >= 0 ? values[idx--] : 0;
-                            if (oldVal !== grid[row][j]) moved = true;
-                        }
-                    }
-                }
-                
-                updateScore();
-                return moved;
-            }
-            
-            // 向上移动（保持X位置不变）
-            function moveUp() {
-                let moved = false;
-                
-                for (let col = 0; col < 4; col++) {
-                    // 收集非X位置的值
-                    let values = [];
-                    for (let i = 0; i < 4; i++) {
-                        if (!isBlocked(i, col) && grid[i][col] !== 0) {
-                            values.push(grid[i][col]);
-                        }
-                    }
-                    
-                    // 合并
-                    for (let i = 0; i < values.length - 1; i++) {
-                        if (canMerge(values[i], values[i + 1])) {
-                            const val = values[i];
-                            values[i] += values[i + 1];
-                            score += values[i];
-                            mergedValues.push(values[i]);
-                            if (isPowerOf2(val) && isPowerOf2(values[i])) {
-                                maxMergedPowerOf2 = Math.max(maxMergedPowerOf2, values[i]);
-                            }
-                            values.splice(i + 1, 1);
-                            moved = true;
-                        }
-                    }
-                    
-                    // 填回grid（只填非X位置）
-                    let idx = 0;
-                    for (let i = 0; i < 4; i++) {
-                        if (!isBlocked(i, col)) {
-                            const oldVal = grid[i][col];
-                            grid[i][col] = idx < values.length ? values[idx++] : 0;
-                            if (oldVal !== grid[i][col]) moved = true;
-                        }
-                    }
-                }
-                
-                updateScore();
-                return moved;
-            }
-            
-            // 向下移动（保持X位置不变）
-            function moveDown() {
-                let moved = false;
-                
-                for (let col = 0; col < 4; col++) {
-                    // 收集非X位置的值
-                    let values = [];
-                    for (let i = 0; i < 4; i++) {
-                        if (!isBlocked(i, col) && grid[i][col] !== 0) {
-                            values.push(grid[i][col]);
-                        }
-                    }
-                    
-                    // 合并（从下向上）
-                    for (let i = values.length - 1; i > 0; i--) {
-                        if (canMerge(values[i], values[i - 1])) {
-                            const val = values[i];
-                            values[i] += values[i - 1];
-                            score += values[i];
-                            mergedValues.push(values[i]);
-                            if (isPowerOf2(val) && isPowerOf2(values[i])) {
-                                maxMergedPowerOf2 = Math.max(maxMergedPowerOf2, values[i]);
-                            }
-                            values.splice(i - 1, 1);
-                            i--;
-                            moved = true;
-                        }
-                    }
-                    
-                    // 填回grid（只填非X位置，从下向上）
-                    let idx = values.length - 1;
-                    for (let i = 3; i >= 0; i--) {
-                        if (!isBlocked(i, col)) {
-                            const oldVal = grid[i][col];
-                            grid[i][col] = idx >= 0 ? values[idx--] : 0;
-                            if (oldVal !== grid[i][col]) moved = true;
-                        }
-                    }
-                }
-                
-                updateScore();
-                return moved;
-            }
-            
             // 检查游戏是否结束（考虑X位置）
             function isGameOver() {
                 // 检查是否有空格（跳过X位置）
@@ -1953,12 +2299,12 @@ function renderTilesWithAnimation(oldGrid) {
                     }
                 }
                 
-                // 检查是否有可合并的相邻方块（跳过X位置）
+                // 检查是否有可合并的相邻方块（跳过X位置，考虑冰冻状态）
                 for (let i = 0; i < 4; i++) {
                     for (let j = 0; j < 4; j++) {
                         if (isBlocked(i, j) || grid[i][j] === -1) continue;
-                        if (j < 3 && !isBlocked(i, j + 1) && canMerge(grid[i][j], grid[i][j + 1])) return false;
-                        if (i < 3 && !isBlocked(i + 1, j) && canMerge(grid[i][j], grid[i + 1][j])) return false;
+                        if (j < 3 && !isBlocked(i, j + 1) && canMerge(grid[i][j], grid[i][j + 1], frozenGrid[i][j], frozenGrid[i][j + 1])) return false;
+                        if (i < 3 && !isBlocked(i + 1, j) && canMerge(grid[i][j], grid[i + 1][j], frozenGrid[i][j], frozenGrid[i + 1][j])) return false;
                     }
                 }
                 
@@ -2007,7 +2353,7 @@ function renderTilesWithAnimation(oldGrid) {
                 
                 const tiles = tileContainer.querySelectorAll('div');
                 tiles.forEach(tile => {
-                    if (activeItem) {
+                    if (activeItem && tile.dataset.frozen !== 'true') {
                         tile.classList.add('tile-highlight');
                     } else {
                         tile.classList.remove('tile-highlight');
@@ -2018,6 +2364,8 @@ function renderTilesWithAnimation(oldGrid) {
             
             // 使用深度优先搜索(DFS)查找所有连通的同色方块（跳过X位置）
             function findConnectedSameColorTiles(startRow, startCol) {
+                // 冰冻方块不参与同色消除
+                if (frozenGrid[startRow][startCol]) return [];
                 if (isBlocked(startRow, startCol) || grid[startRow][startCol] === -1) return [];
                 const targetColorClass = getTileColorClass(grid[startRow][startCol]);
                 const visited = Array(4).fill().map(() => Array(4).fill(false));
@@ -2026,7 +2374,7 @@ function renderTilesWithAnimation(oldGrid) {
                 function dfs(row, col) {
                     if (row < 0 || row >= 4 || col < 0 || col >= 4) return;
                     if (visited[row][col]) return;
-                    if (isBlocked(row, col) || grid[row][col] === -1) return;
+                    if (isBlocked(row, col) || grid[row][col] === -1 || frozenGrid[row][col]) return;
                     if (grid[row][col] === 0) return;
                     if (getTileColorClass(grid[row][col]) !== targetColorClass) return;
                     
@@ -2045,6 +2393,12 @@ function renderTilesWithAnimation(oldGrid) {
             
             // 道具系统 - 在方块上使用道具
             function useItemOnTile(row, col) {
+                // 无法对冰冻方块使用道具
+                if (frozenGrid[row][col]) {
+                    showToast('无法对冰冻方块使用道具！');
+                    return;
+                }
+                
                 if (!activeItem || items[activeItem] <= 0) return;
                 
                 const value = grid[row][col];
@@ -2066,7 +2420,9 @@ function renderTilesWithAnimation(oldGrid) {
                                 if (parseInt(tile.dataset.row) === row && parseInt(tile.dataset.col) === col) {
                                     tile.classList.add('tile-selected');
                                 }
-                                tile.classList.add('tile-highlight');
+                                if (tile.dataset.frozen !== 'true') {
+                                    tile.classList.add('tile-highlight');
+                                }
                             });
                             return;
                         } else {
@@ -2076,13 +2432,20 @@ function renderTilesWithAnimation(oldGrid) {
                                 showToast('已取消选择');
                                 renderTiles(grid);
                                 const tiles = tileContainer.querySelectorAll('div');
-                                tiles.forEach(tile => tile.classList.add('tile-highlight'));
+                                tiles.forEach(tile => {
+                                    if (tile.dataset.frozen !== 'true') {
+                                        tile.classList.add('tile-highlight');
+                                    }
+                                });
                                 return;
                             }
                             
                             // 任意两个方块都可以交换
                             [grid[selectedTile.row][selectedTile.col], grid[row][col]] = 
                             [grid[row][col], grid[selectedTile.row][selectedTile.col]];
+                            // 同时交换冰冻状态
+                            [frozenGrid[selectedTile.row][selectedTile.col], frozenGrid[row][col]] = 
+                            [frozenGrid[row][col], frozenGrid[selectedTile.row][col]];
                             
                             success = true;
                             showToast('交换成功！');
@@ -2097,7 +2460,10 @@ function renderTilesWithAnimation(oldGrid) {
                             for (const tile of connectedTiles) sum += tile.value;
                             const average = Math.round(sum / connectedTiles.length);
                             
-                            for (const tile of connectedTiles) grid[tile.row][tile.col] = 0;
+                            for (const tile of connectedTiles) {
+                                grid[tile.row][tile.col] = 0;
+                                frozenGrid[tile.row][tile.col] = false;
+                            }
                             grid[row][col] = average;
                             
                             success = true;
@@ -2152,28 +2518,36 @@ function renderTilesWithAnimation(oldGrid) {
             // 使用洗牌道具（保持X位置不变）
             function useShuffleItem() {
                 const oldGrid = JSON.parse(JSON.stringify(grid));
+                // 只收集非冰冻方块的数值
                 const values = [];
                 for (let i = 0; i < 4; i++) {
                     for (let j = 0; j < 4; j++) {
-                        if (!isBlocked(i, j) && grid[i][j] !== 0) values.push(grid[i][j]);
+                        if (!isBlocked(i, j) && grid[i][j] !== 0 && !frozenGrid[i][j]) {
+                            values.push(grid[i][j]);
+                        }
                     }
                 }
                 
+                // 打乱顺序
                 for (let i = values.length - 1; i > 0; i--) {
                     const j = Math.floor(Math.random() * (i + 1));
                     [values[i], values[j]] = [values[j], values[i]];
                 }
                 
-                // 重新填回grid，保持X位置不变
+                // 重新填回grid，冰冻方块位置和数值保持不变
                 let index = 0;
                 for (let i = 0; i < 4; i++) {
                     for (let j = 0; j < 4; j++) {
                         if (isBlocked(i, j)) {
                             grid[i][j] = -1;
+                        } else if (frozenGrid[i][j]) {
+                            // 冰冻方块保持不变
                         } else if (index < values.length) {
                             grid[i][j] = values[index++];
+                            frozenGrid[i][j] = false;
                         } else {
                             grid[i][j] = 0;
+                            frozenGrid[i][j] = false;
                         }
                     }
                 }
@@ -2189,7 +2563,7 @@ function renderTilesWithAnimation(oldGrid) {
                 pushHistory();
                 saveGameState();
                 
-                showToast('所有方块已打乱！');
+                showToast('所有非冰冻方块已打乱！');
                 combo32Count = 0;
 
                 if (!checkWin() && isGameOver()) {
